@@ -56,6 +56,22 @@ enters the selected direct `mtvec` or `stvec` address.
 and mode. Their legality is checked before any return state is mutated. Traces retain both the
 before and after privilege so trap and return edges can be inspected without an internal snapshot.
 
+### Address translation
+
+`sv39.cpp` is an independent translation component between a future CPU virtual-access boundary and
+the physical bus. Its input names the root PPN, effective U/S privilege, access type, SUM, and MXR.
+Its result is either a physical address with leaf-level/PTE provenance or a typed fault with the
+original virtual address, walk level, PTE address, and PTE value.
+
+The walker supports 4 KiB, 2 MiB, and 1 GiB leaves and validates canonical addresses, reserved PTE
+encodings, superpage alignment, U/S permissions, SUM, MXR, and R/W/X. It implements software-managed
+A/D behavior: clear A, or clear D on a store, returns a fault without modifying the PTE. Physical PTE
+reads use the explicit `PageTableWalk` bus access kind.
+
+The current CPU does not call the walker. Keeping the first implementation detached makes page-table
+semantics testable without instruction execution and avoids claiming working virtual memory before
+fetch, load, store, and page-fault integration land.
+
 ### Trace
 
 Each `StepRecord` is emitted as one ordered JSON object. Numeric architecture values are fixed-width
@@ -72,6 +88,7 @@ unordered container is serialized.
 6. The same machine state and deterministic inputs produce the same `StepRecord` sequence.
 7. The interpreter is the reference semantics for future optimized backends.
 8. An exception originating in M mode never delegates to S mode.
+9. The standalone Sv39 walker never mutates guest page tables.
 
 ## Extension Points
 

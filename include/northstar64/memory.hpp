@@ -17,7 +17,7 @@
 
 namespace northstar64 {
 
-enum class AccessKind { InstructionFetch, Load, Store, ImageLoad };
+enum class AccessKind { InstructionFetch, Load, Store, PageTableWalk, ImageLoad };
 
 struct BusFault {
   Address address{};
