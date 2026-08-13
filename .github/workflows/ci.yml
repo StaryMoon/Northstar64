@@ -1,0 +1,100 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: ${{ matrix.os }} / ${{ matrix.compiler }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            compiler: gcc
+            cc: gcc
+            cxx: g++
+          - os: ubuntu-24.04
+            compiler: clang
+            cc: clang
+            cxx: clang++
+          - os: macos-14
+            compiler: apple-clang
+            cc: clang
+            cxx: clang++
+    runs-on: ${{ matrix.os }}
+    env:
+      CC: ${{ matrix.cc }}
+      CXX: ${{ matrix.cxx }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: >-
+          cmake -S . -B build -G Ninja
+          -DCMAKE_BUILD_TYPE=Debug
+          -DNORTHSTAR64_WARNINGS_AS_ERRORS=ON
+      - name: Build
+        run: cmake --build build --parallel
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+      - name: CLI smoke test
+        run: |
+          ./build/northstar64 version
+          ./build/northstar64 decode 0x02a00093 | grep -F 'addi x1, x0, 42'
+
+  sanitizers:
+    name: ASan + UBSan
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: >-
+          cmake -S . -B build -G Ninja
+          -DCMAKE_BUILD_TYPE=Debug
+          -DNORTHSTAR64_ENABLE_SANITIZERS=ON
+          -DNORTHSTAR64_WARNINGS_AS_ERRORS=ON
+      - name: Build
+        run: cmake --build build --parallel
+      - name: Test
+        env:
+          ASAN_OPTIONS: detect_leaks=1:strict_string_checks=1:check_initialization_order=1
+          UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
+        run: ctest --test-dir build --output-on-failure
+
+  riscv-toolchain-integration:
+    name: Real RV64I guest integration
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install RISC-V bare-metal toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes gcc-riscv64-unknown-elf
+      - name: Build emulator
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DNORTHSTAR64_WARNINGS_AS_ERRORS=ON
+          cmake --build build --parallel
+      - name: Build RV64I guests
+        run: make -C tests/integration BUILD_DIR="$GITHUB_WORKSPACE/build/guest"
+      - name: Run black-box integration assertions
+        run: tests/integration/run.sh ./build/northstar64 ./build/guest
+      - name: Cross-check guest UART output on QEMU virt
+        run: |
+          sudo apt-get install --yes qemu-system-misc
+          timeout 3s qemu-system-riscv64 \
+            -machine virt -bios none -nographic \
+            -kernel ./build/guest/hello.elf >qemu.stdout 2>qemu.stderr || status=$?
+          test "${status:-0}" -eq 124
+          grep -F 'NS64' qemu.stdout
