@@ -37,7 +37,7 @@ jobs:
       CC: ${{ matrix.cc }}
       CXX: ${{ matrix.cxx }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Configure
         run: >-
           cmake -S . -B build -G Ninja
@@ -56,7 +56,7 @@ jobs:
     name: ASan + UBSan
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Configure
         run: >-
           cmake -S . -B build -G Ninja
@@ -75,7 +75,7 @@ jobs:
     name: Real RV64I guest integration
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install RISC-V bare-metal toolchain
         run: |
           sudo apt-get update
