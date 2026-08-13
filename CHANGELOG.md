@@ -16,6 +16,9 @@ All notable changes to Northstar64 are documented here. The project follows
   and software-managed A/D behavior.
 - CPU-connected Sv39 fetch/load/store translation, access-specific page faults, `SFENCE.VMA`, and
   virtual/physical address evidence in deterministic traces.
+- Portable M/S/U isolation guest with supervisor-mediated UART, full trap-frame restoration,
+  negative page-permission tests, deterministic transcripts, and QEMU `virt` cross-checking.
+- CLI selection between halt-on-trap and architectural vector trap policies.
 
 ## [0.1.0] - 2026-08-13
 

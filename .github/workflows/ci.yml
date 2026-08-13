@@ -90,11 +90,15 @@ jobs:
         run: make -C tests/integration BUILD_DIR="$GITHUB_WORKSPACE/build/guest"
       - name: Run black-box integration assertions
         run: tests/integration/run.sh ./build/northstar64 ./build/guest
-      - name: Cross-check guest UART output on QEMU virt
+      - name: Install QEMU
         run: |
           sudo apt-get install --yes qemu-system-misc
+      - name: Cross-check machine-mode smoke guest on QEMU virt
+        run: |
           timeout 3s qemu-system-riscv64 \
             -machine virt -bios none -nographic \
             -kernel ./build/guest/hello.elf >qemu.stdout 2>qemu.stderr || status=$?
           test "${status:-0}" -eq 124
           grep -F 'NS64' qemu.stdout
+      - name: Run the portable M/S/U isolation guest on QEMU virt
+        run: tests/integration/run-qemu.sh "$(command -v qemu-system-riscv64)" ./build/guest/isolation.elf

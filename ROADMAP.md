@@ -25,12 +25,14 @@ breakpoint, and produces identical traces across repeated runs.
 - [x] implement precise `MRET`/`SRET` state restoration
 - [x] implement an independent Sv39 page-table walker
 - [x] connect CPU fetch/load/store and define `SFENCE.VMA`
-- add a software TLB
-- enforce R/W/X/U/A/D permissions and canonical virtual addresses
-- differential page-table tests against an independent reference walker
+- [x] enforce R/W/X/U/A/D permissions and canonical virtual addresses
+- [x] differential page-table tests against an independent reference walker
+- [x] run one M/S/U isolation guest on Northstar64 and QEMU `virt`
+- [ ] add a software TLB
 
-Exit criterion: a supervisor guest enters user mode, faults on forbidden memory, handles the trap,
-and resumes; randomized page-table cases agree with the reference model.
+Exit criterion: a supervisor guest enters user mode, faults on forbidden and read-only memory,
+handles both traps, and resumes on Northstar64 and QEMU; randomized page-table cases agree with the
+reference model. The portable guest portion is complete; the milestone remains open for the TLB.
 
 ## 0.3 - Interrupt-Capable Platform
 

@@ -23,7 +23,8 @@ using namespace northstar64;
 void usage(std::ostream& output) {
   output << "Northstar64 - deterministic RV64 machine laboratory\n\n"
          << "Usage:\n"
-         << "  northstar64 run <guest.elf> [--max-steps N] [--trace FILE]\n"
+         << "  northstar64 run <guest.elf> [--max-steps N] [--trace FILE]"
+            " [--trap-policy halt|vector]\n"
          << "  northstar64 inspect <guest.elf>\n"
          << "  northstar64 decode <32-bit-word>\n"
          << "  northstar64 verify-trace <left.jsonl> <right.jsonl>\n"
@@ -94,6 +95,7 @@ int run_command(int argc, char** argv) {
   const std::filesystem::path path = argv[2];
   std::uint64_t maximum_steps = 1'000'000;
   std::filesystem::path trace_path;
+  TrapPolicy trap_policy = TrapPolicy::Halt;
 
   for (int index = 3; index < argc; ++index) {
     const std::string_view argument = argv[index];
@@ -107,12 +109,26 @@ int run_command(int argc, char** argv) {
         throw std::invalid_argument("--trace requires a file path");
       }
       trace_path = argv[index];
+    } else if (argument == "--trap-policy") {
+      if (++index >= argc) {
+        throw std::invalid_argument("--trap-policy requires halt or vector");
+      }
+      const std::string_view value = argv[index];
+      if (value == "halt") {
+        trap_policy = TrapPolicy::Halt;
+      } else if (value == "vector") {
+        trap_policy = TrapPolicy::Vector;
+      } else {
+        throw std::invalid_argument("--trap-policy requires halt or vector");
+      }
     } else {
       throw std::invalid_argument("unknown run option: " + std::string(argument));
     }
   }
 
-  Machine machine({}, &std::cout);
+  MachineConfig machine_config;
+  machine_config.cpu.trap_policy = trap_policy;
+  Machine machine(machine_config, &std::cout);
   const auto image = machine.load(path);
   std::unique_ptr<JsonlTraceWriter> trace;
   if (!trace_path.empty()) {

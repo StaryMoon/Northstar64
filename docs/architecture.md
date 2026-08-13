@@ -78,6 +78,18 @@ original virtual address.
 retires without a cache action because there is no TLB yet. Traces keep architectural PC/data
 addresses while recording virtual/physical translation pairs and physical memory-write targets.
 
+### Cross-machine integration guest
+
+`tests/integration/isolation.S` is deliberately independent of the host test fixtures. One ELF
+starts in M mode, constructs static supervisor-owned page tables, enters S mode and then U mode, and
+uses a complete supervisor trap frame to recover from two negative permission tests. User UART
+output is mediated by an environment call instead of exposing MMIO to U mode.
+
+The same image runs on Northstar64 and QEMU `virt`, and both must emit the same fixed transcript.
+Northstar64 additionally executes the image twice and compares every JSONL step byte for byte. A
+guarded PMP capability probe accommodates QEMU without claiming a Northstar64 PMP model; see
+[ADR 0009](adr/0009-portable-privilege-isolation-guest.md).
+
 ### Trace
 
 Each `StepRecord` is emitted as one ordered JSON object. Numeric architecture values are fixed-width
@@ -96,6 +108,8 @@ unordered container is serialized.
 8. An exception originating in M mode never delegates to S mode.
 9. The standalone Sv39 walker never mutates guest page tables.
 10. A translated access fault records the original virtual address as trap value.
+11. The portable isolation guest emits PASS only after both expected page faults are handled in
+    order and user execution resumes after each one.
 
 ## Extension Points
 

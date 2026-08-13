@@ -28,6 +28,37 @@ grep -F '"name":"breakpoint"' "$work_dir/first.jsonl"
   --trace "$work_dir/second.jsonl" >/dev/null 2>/dev/null
 "$emulator" verify-trace "$work_dir/first.jsonl" "$work_dir/second.jsonl"
 
+"$emulator" inspect "$guest_dir/isolation.elf" >"$work_dir/isolation.inspect.txt"
+grep -F "ELF64 RISC-V" "$work_dir/isolation.inspect.txt"
+grep -F "flags=R-X" "$work_dir/isolation.inspect.txt"
+grep -F "flags=RW-" "$work_dir/isolation.inspect.txt"
+
+"$emulator" run "$guest_dir/isolation.elf" --max-steps 20000 \
+  --trap-policy vector --trace "$work_dir/isolation-first.jsonl" \
+  >"$work_dir/isolation.stdout" 2>"$work_dir/isolation.stderr"
+cmp "$(dirname "$0")/isolation.expected" "$work_dir/isolation.stdout"
+grep -F 'stop=halted' "$work_dir/isolation.stderr"
+grep -F 'WFI reached with no interrupt source configured' "$work_dir/isolation.stderr"
+
+test "$(grep -cF '"name":"environment-call-from-user-mode"' \
+  "$work_dir/isolation-first.jsonl")" -eq 6
+test "$(grep -cF '"name":"load-page-fault"' \
+  "$work_dir/isolation-first.jsonl")" -eq 1
+test "$(grep -cF '"name":"store-page-fault"' \
+  "$work_dir/isolation-first.jsonl")" -eq 1
+grep -F '"name":"load-page-fault","value":"0x0000000040004000"' \
+  "$work_dir/isolation-first.jsonl"
+grep -F '"name":"store-page-fault","value":"0x0000000040002000"' \
+  "$work_dir/isolation-first.jsonl"
+grep -F '"privilege":"machine"' "$work_dir/isolation-first.jsonl" | grep -F '"next_privilege":"supervisor"'
+grep -F '"privilege":"supervisor"' "$work_dir/isolation-first.jsonl" | grep -F '"next_privilege":"user"'
+grep -F '"privilege":"user"' "$work_dir/isolation-first.jsonl" | grep -F '"next_privilege":"supervisor"'
+
+"$emulator" run "$guest_dir/isolation.elf" --max-steps 20000 \
+  --trap-policy vector --trace "$work_dir/isolation-second.jsonl" >/dev/null 2>/dev/null
+"$emulator" verify-trace "$work_dir/isolation-first.jsonl" \
+  "$work_dir/isolation-second.jsonl"
+
 set +e
 "$emulator" run "$guest_dir/loop.elf" --max-steps 32 >/dev/null 2>"$work_dir/loop.stderr"
 status=$?
