@@ -133,6 +133,10 @@ public:
   [[nodiscard]] TrapReturn return_from_trap(TrapReturnMode mode);
   [[nodiscard]] std::uint64_t cycle_count() const noexcept { return mcycle_; }
   [[nodiscard]] std::uint64_t retired_count() const noexcept { return minstret_; }
+  [[nodiscard]] std::uint64_t mstatus_value() const noexcept {
+    return mstatus_ | status::kMstatusFixedValue;
+  }
+  [[nodiscard]] std::uint64_t satp_value() const noexcept { return satp_; }
 
 private:
   [[nodiscard]] std::optional<CsrError> validate_access(std::uint16_t address,

@@ -39,6 +39,9 @@ TEST_CASE("trace records have stable ordered JSON fields") {
   record.next_privilege = PrivilegeLevel::User;
   record.retired = true;
   record.register_write = RegisterWrite{1, 42};
+  record.instruction_translation = AddressTranslation{0x40000000, 0x80020000};
+  record.data_translation = AddressTranslation{0x40001000, 0x80021000};
+  record.memory_write = MemoryWrite{0x40001000, 8, 42, 0x80021000};
 
   const auto formatted = format_trace_record(record);
   CHECK(formatted.starts_with(
@@ -47,6 +50,16 @@ TEST_CASE("trace records have stable ordered JSON fields") {
   CHECK(formatted.find("\"register_write\":{\"index\":1,\"value\":\"0x000000000000002a\"}") !=
         std::string::npos);
   CHECK(formatted.find("\"next_privilege\":\"U\"") != std::string::npos);
+  CHECK(formatted.find(
+            "\"instruction_translation\":{\"virtual_address\":\"0x0000000040000000\","
+            "\"physical_address\":\"0x0000000080020000\"}") != std::string::npos);
+  CHECK(formatted.find(
+            "\"data_translation\":{\"virtual_address\":\"0x0000000040001000\","
+            "\"physical_address\":\"0x0000000080021000\"}") != std::string::npos);
+  CHECK(formatted.find(
+            "\"memory_write\":{\"address\":\"0x0000000040001000\",\"width\":8,"
+            "\"value\":\"0x000000000000002a\","
+            "\"physical_address\":\"0x0000000080021000\"}") != std::string::npos);
   CHECK(formatted.ends_with("\"trap\":null}"));
 }
 

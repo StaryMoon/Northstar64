@@ -26,9 +26,14 @@ const char* trap_name(TrapCause cause) noexcept {
     return "environment-call-from-supervisor-mode";
   case TrapCause::EnvironmentCallFromMachineMode:
     return "environment-call-from-machine-mode";
+  case TrapCause::InstructionPageFault:
+    return "instruction-page-fault";
+  case TrapCause::LoadPageFault:
+    return "load-page-fault";
+  case TrapCause::StorePageFault:
+    return "store-page-fault";
   }
   return "unknown-trap";
 }
 
 } // namespace northstar64
-

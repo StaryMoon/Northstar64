@@ -125,6 +125,58 @@ void Cpu::write_register(StepRecord& record, std::uint8_t index, std::uint64_t v
   record.register_write = RegisterWrite{index, value};
 }
 
+std::optional<Address> Cpu::translate(StepRecord& record, Address address,
+                                      VirtualAccess access) {
+  constexpr auto kSatpModeSv39 = std::uint64_t{8} << 60U;
+  constexpr auto kSatpModeMask = std::uint64_t{0xf} << 60U;
+  constexpr auto kSatpPpnMask = (std::uint64_t{1} << 44U) - 1U;
+  const auto satp = csrs_.satp_value();
+  if (privilege_ == PrivilegeLevel::Machine || (satp & kSatpModeMask) != kSatpModeSv39) {
+    const AddressTranslation translation{address, address};
+    if (access == VirtualAccess::InstructionFetch) {
+      record.instruction_translation = translation;
+    } else {
+      record.data_translation = translation;
+    }
+    return address;
+  }
+
+  const auto mstatus = csrs_.mstatus_value();
+  const Sv39Context context{satp & kSatpPpnMask, privilege_, access,
+                            (mstatus & status::kSum) != 0U,
+                            (mstatus & status::kMxr) != 0U};
+  const auto result = walk_sv39(bus_, address, context);
+  if (const auto* fault = std::get_if<Sv39Fault>(&result)) {
+    const auto cause = access == VirtualAccess::InstructionFetch
+                           ? TrapCause::InstructionPageFault
+                       : access == VirtualAccess::Load ? TrapCause::LoadPageFault
+                                                       : TrapCause::StorePageFault;
+    if (fault->reason == Sv39FaultReason::PageTableAccess) {
+      const auto access_cause = access == VirtualAccess::InstructionFetch
+                                    ? TrapCause::InstructionAccessFault
+                                : access == VirtualAccess::Load ? TrapCause::LoadAccessFault
+                                                                : TrapCause::StoreAccessFault;
+      raise_trap(record, access_cause, address,
+                 std::string("Sv39 page-table access failed at level ") +
+                     std::to_string(fault->level) + ": " + fault->detail);
+    } else {
+      raise_trap(record, cause, address,
+                 std::string(sv39_fault_reason_name(fault->reason)) + " at level " +
+                     std::to_string(fault->level) + ": " + fault->detail);
+    }
+    return std::nullopt;
+  }
+
+  const auto physical = std::get<Sv39Translation>(result).physical_address;
+  const AddressTranslation translation{address, physical};
+  if (access == VirtualAccess::InstructionFetch) {
+    record.instruction_translation = translation;
+  } else {
+    record.data_translation = translation;
+  }
+  return physical;
+}
+
 void Cpu::raise_trap(StepRecord& record, TrapCause cause, std::uint64_t value,
                      std::string detail) {
   Trap trap{cause, record.pc, value, std::move(detail)};
@@ -153,7 +205,11 @@ std::optional<std::uint64_t> Cpu::load(StepRecord& record, Address address,
                "load address is not naturally aligned");
     return std::nullopt;
   }
-  auto result = bus_.read(address, width, AccessKind::Load);
+  const auto physical = translate(record, address, VirtualAccess::Load);
+  if (!physical) {
+    return std::nullopt;
+  }
+  auto result = bus_.read(*physical, width, AccessKind::Load);
   if (const auto* fault = std::get_if<BusFault>(&result)) {
     raise_trap(record, TrapCause::LoadAccessFault, address, fault->detail);
     return std::nullopt;
@@ -173,11 +229,15 @@ bool Cpu::store(StepRecord& record, Address address, std::size_t width, std::uin
     return false;
   }
   value &= mask_for_width(width);
-  if (auto fault = bus_.write(address, width, value, AccessKind::Store)) {
+  const auto physical = translate(record, address, VirtualAccess::Store);
+  if (!physical) {
+    return false;
+  }
+  if (auto fault = bus_.write(*physical, width, value, AccessKind::Store)) {
     raise_trap(record, TrapCause::StoreAccessFault, address, fault->detail);
     return false;
   }
-  record.memory_write = MemoryWrite{address, width, value};
+  record.memory_write = MemoryWrite{address, width, value, *physical};
   return true;
 }
 
@@ -383,6 +443,13 @@ void Cpu::execute(StepRecord& record, const DecodedInstruction& instruction) {
   case Operation::Fence:
   case Operation::FenceI:
     break;
+  case Operation::SfenceVma:
+    if (privilege_ == PrivilegeLevel::User) {
+      raise_trap(record, TrapCause::IllegalInstruction, instruction.raw,
+                 "SFENCE.VMA requires supervisor or machine privilege");
+      return;
+    }
+    break;
   case Operation::Ecall:
     if (privilege_ == PrivilegeLevel::User) {
       raise_trap(record, TrapCause::EnvironmentCallFromUserMode, 0,
@@ -501,7 +568,11 @@ StepRecord Cpu::step() {
     return record;
   }
 
-  auto fetched = bus_.read(pc_, kInstructionBytes, AccessKind::InstructionFetch);
+  const auto fetch_address = translate(record, pc_, VirtualAccess::InstructionFetch);
+  if (!fetch_address) {
+    return record;
+  }
+  auto fetched = bus_.read(*fetch_address, kInstructionBytes, AccessKind::InstructionFetch);
   if (const auto* fault = std::get_if<BusFault>(&fetched)) {
     raise_trap(record, TrapCause::InstructionAccessFault, pc_, fault->detail);
     return record;

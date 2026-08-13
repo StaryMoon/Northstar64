@@ -55,3 +55,12 @@ TEST_CASE("decoder accepts machine control and CSR instructions") {
   CHECK(csr_instruction.operation == Operation::Csrrw);
   CHECK_EQ(csr_instruction.csr, csr::kMtvec);
 }
+
+TEST_CASE("decoder accepts SFENCE VMA register operands") {
+  const auto instruction =
+      std::get<DecodedInstruction>(decode(encode_sfence_vma(3, 7)));
+  CHECK(instruction.operation == Operation::SfenceVma);
+  CHECK_EQ(instruction.rs1, std::uint8_t{3});
+  CHECK_EQ(instruction.rs2, std::uint8_t{7});
+  CHECK_EQ(disassemble(instruction), std::string("sfence.vma x3, x7"));
+}

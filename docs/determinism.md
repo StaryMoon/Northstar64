@@ -21,6 +21,11 @@ Each attempted step records both `privilege` and `next_privilege`. Equal values 
 ordinary instruction or an in-mode trap; a different pair exposes a trap-entry or xRET privilege
 edge directly. The 0.2 development schema inserts `next_privilege` immediately after `next_pc`.
 
+The same schema records `instruction_translation` and `data_translation` as explicit virtual and
+physical address pairs. `pc`, trap values, and memory-operation inputs remain architectural virtual
+addresses; physical write targets are recorded separately. Identity/Bare paths also emit equal
+virtual and physical values, so address-routing decisions remain visible rather than implicit.
+
 ## Comparison
 
 `verify-trace` compares streams without loading them into memory and reports the first different line.

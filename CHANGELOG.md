@@ -14,6 +14,8 @@ All notable changes to Northstar64 are documented here. The project follows
 - Precise `SRET`/`MRET` privilege-stack restoration and before/after privilege trace fields.
 - Independent Sv39 page-table walker with typed fault provenance, superpages, permission checks,
   and software-managed A/D behavior.
+- CPU-connected Sv39 fetch/load/store translation, access-specific page faults, `SFENCE.VMA`, and
+  virtual/physical address evidence in deterministic traces.
 
 ## [0.1.0] - 2026-08-13
 

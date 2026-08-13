@@ -189,6 +189,9 @@ DecodeResult decode_op_32(std::uint32_t raw, std::uint8_t funct3) {
 
 DecodeResult decode_system(std::uint32_t raw, std::uint8_t funct3) {
   if (funct3 == 0U) {
+    if ((raw & 0xfe007fffU) == 0x12000073U) {
+      return instruction(raw, Operation::SfenceVma);
+    }
     switch (raw) {
     case 0x00000073U:
       return instruction(raw, Operation::Ecall);
@@ -328,6 +331,7 @@ const char* operation_name(Operation operation) noexcept {
     NORTHSTAR64_OPERATION_CASE(Sraw, "sraw");
     NORTHSTAR64_OPERATION_CASE(Fence, "fence");
     NORTHSTAR64_OPERATION_CASE(FenceI, "fence.i");
+    NORTHSTAR64_OPERATION_CASE(SfenceVma, "sfence.vma");
     NORTHSTAR64_OPERATION_CASE(Ecall, "ecall");
     NORTHSTAR64_OPERATION_CASE(Ebreak, "ebreak");
     NORTHSTAR64_OPERATION_CASE(Sret, "sret");
@@ -444,6 +448,10 @@ std::string disassemble(const DecodedInstruction& decoded) {
   case Operation::Sret:
   case Operation::Mret:
   case Operation::Wfi:
+    break;
+  case Operation::SfenceVma:
+    output << " x" << static_cast<unsigned>(decoded.rs1) << ", x"
+           << static_cast<unsigned>(decoded.rs2);
     break;
   }
   return output.str();

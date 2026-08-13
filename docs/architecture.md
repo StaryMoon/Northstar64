@@ -68,9 +68,15 @@ encodings, superpage alignment, U/S permissions, SUM, MXR, and R/W/X. It impleme
 A/D behavior: clear A, or clear D on a store, returns a fault without modifying the PTE. Physical PTE
 reads use the explicit `PageTableWalk` bus access kind.
 
-The current CPU does not call the walker. Keeping the first implementation detached makes page-table
-semantics testable without instruction execution and avoids claiming working virtual memory before
-fetch, load, store, and page-fault integration land.
+The CPU calls the walker for S/U instruction fetches, loads, and stores when `satp.MODE=Sv39`.
+Machine-mode accesses and all accesses under Bare use identity translation. A translation rejection
+becomes the access-specific page-fault cause; failure to read a PTE from the physical bus and failure
+after a successful translation become access faults. All architectural trap values retain the
+original virtual address.
+
+`SFENCE.VMA` is decoded and privilege-checked as the translation-cache invalidation boundary. It
+retires without a cache action because there is no TLB yet. Traces keep architectural PC/data
+addresses while recording virtual/physical translation pairs and physical memory-write targets.
 
 ### Trace
 
@@ -89,6 +95,7 @@ unordered container is serialized.
 7. The interpreter is the reference semantics for future optimized backends.
 8. An exception originating in M mode never delegates to S mode.
 9. The standalone Sv39 walker never mutates guest page tables.
+10. A translated access fault records the original virtual address as trap value.
 
 ## Extension Points
 

@@ -20,8 +20,8 @@
 The development branch models current M/S/U privilege, enforces CSR address-encoded access rules,
 and exposes the supervisor CSR bank (`sstatus`, `sie`, `stvec`, `scounteren`, trap state, `sip`, and
 `satp`). User counter reads pass through both machine and supervisor enable state. The `SXL`/`UXL`
-fields are fixed to 64 bits. `satp` accepts Bare and Sv39 state encodings; address translation has not
-been connected to CPU accesses yet.
+fields are fixed to 64 bits. `satp` accepts Bare and Sv39 state encodings; address translation is
+connected to S/U CPU instruction fetches, loads, and stores.
 
 Synchronous exceptions consult `medeleg` only when they originate below M mode. Delegated traps
 write `sepc/scause/stval`, enter direct `stvec`, and update `SIE/SPIE/SPP`. All other traps write the
@@ -32,8 +32,9 @@ illegal lower-privilege execution traps without retiring.
 An independent Sv39 walker implements canonical-address checks, three-level traversal, all three
 leaf sizes, superpage alignment, U/S/SUM/MXR/R/W/X checks, reserved PTE validation, and Svade-style
 A/D faults. It reads PTEs through the physical bus and returns fault provenance without modifying
-page tables. This is reference semantics for the upcoming CPU integration, not a claim that current
-guest fetch/load/store operations use virtual addresses.
+page tables. CPU integration maps translation failures to instruction/load/store page faults and
+physical-walk or translated-target failures to the corresponding access fault. `SFENCE.VMA` is a
+privilege-checked no-op until a TLB exists.
 
 The advertised machine ISA is `RV64I_Zicsr_Zifencei`. The current `misa` value reports RV64 with
 the `I` bit; `Zicsr` and `Zifencei` are not represented by legacy `misa` extension letters.
@@ -51,7 +52,7 @@ the `I` bit; `Zicsr` and `Zifencei` are not represented by legacy `misa` extensi
 ## Unsupported
 
 - M, A, F, D, C, V, and bit-manipulation extensions
-- CPU-connected Sv39 translation, `SFENCE.VMA`, and TLB behavior; Sv48
+- TLB behavior, MPRV data-access override, and Sv48
 - asynchronous interrupt prioritization and delivery
 - hypervisor state
 - performance counters beyond deterministic `mcycle` and `minstret`

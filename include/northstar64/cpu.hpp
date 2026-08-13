@@ -2,6 +2,7 @@
 
 #include "northstar64/csr.hpp"
 #include "northstar64/memory.hpp"
+#include "northstar64/sv39.hpp"
 #include "northstar64/trace.hpp"
 #include "northstar64/types.hpp"
 
@@ -54,6 +55,8 @@ public:
   [[nodiscard]] const CsrFile& csrs() const noexcept { return csrs_; }
 
 private:
+  [[nodiscard]] std::optional<Address> translate(StepRecord& record, Address address,
+                                                  VirtualAccess access);
   void write_register(StepRecord& record, std::uint8_t index, std::uint64_t value);
   void raise_trap(StepRecord& record, TrapCause cause, std::uint64_t value,
                   std::string detail);
