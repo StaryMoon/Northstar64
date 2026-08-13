@@ -14,6 +14,7 @@ trap 'rm -rf "$work_dir"' EXIT
 "$emulator" inspect "$guest_dir/hello.elf" >"$work_dir/inspect.txt"
 grep -F "ELF64 RISC-V" "$work_dir/inspect.txt"
 grep -F "flags=R-X" "$work_dir/inspect.txt"
+grep -F "flags=RW-" "$work_dir/inspect.txt"
 
 "$emulator" run "$guest_dir/hello.elf" --max-steps 1000 \
   --trace "$work_dir/first.jsonl" >"$work_dir/guest.stdout" 2>"$work_dir/guest.stderr"
@@ -39,4 +40,3 @@ grep -F 'attempted=32' "$work_dir/loop.stderr"
 grep -F 'stop=step-limit' "$work_dir/loop.stderr"
 
 echo "integration guest passed"
-
