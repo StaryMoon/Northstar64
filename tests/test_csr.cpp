@@ -148,3 +148,114 @@ TEST_CASE("WARL state masks unsupported bits and aligns trap PCs") {
   CHECK_EQ(read_value(csrs, csr::kStvec, PrivilegeLevel::Supervisor),
            std::uint64_t{0x80000000});
 }
+
+TEST_CASE("delegated traps update only supervisor trap state") {
+  CsrFile csrs;
+  constexpr auto machine_stack = status::kMie | status::kMpie | status::kMppMask |
+                                 status::kMprv;
+  constexpr auto initial_status = machine_stack | status::kSie;
+  constexpr auto supervisor_handler = std::uint64_t{0x80000100};
+  CHECK(!csrs.write(csr::kMstatus, initial_status));
+  CHECK(!csrs.write(csr::kMedeleg,
+                    std::uint64_t{1} <<
+                        static_cast<std::uint64_t>(TrapCause::EnvironmentCallFromUserMode)));
+  CHECK(!csrs.write(csr::kStvec, supervisor_handler, PrivilegeLevel::Supervisor));
+  CHECK(!csrs.write(csr::kMepc, 0x1110));
+  CHECK(!csrs.write(csr::kMcause, 0x2222));
+  CHECK(!csrs.write(csr::kMtval, 0x3333));
+
+  const Trap trap{TrapCause::EnvironmentCallFromUserMode, 0x80000002, 0x55,
+                  "delegated test trap"};
+  const auto entry = csrs.enter_trap(trap, PrivilegeLevel::User);
+  CHECK(entry.target == PrivilegeLevel::Supervisor);
+  CHECK_EQ(entry.vector, supervisor_handler);
+  CHECK_EQ(read_value(csrs, csr::kSepc, PrivilegeLevel::Supervisor),
+           std::uint64_t{0x80000000});
+  CHECK_EQ(read_value(csrs, csr::kScause, PrivilegeLevel::Supervisor),
+           static_cast<std::uint64_t>(TrapCause::EnvironmentCallFromUserMode));
+  CHECK_EQ(read_value(csrs, csr::kStval, PrivilegeLevel::Supervisor), std::uint64_t{0x55});
+  CHECK_EQ(read_value(csrs, csr::kMepc), std::uint64_t{0x1110});
+  CHECK_EQ(read_value(csrs, csr::kMcause), std::uint64_t{0x2222});
+  CHECK_EQ(read_value(csrs, csr::kMtval), std::uint64_t{0x3333});
+
+  const auto trapped_status = read_value(csrs, csr::kMstatus);
+  CHECK_EQ(trapped_status & machine_stack, initial_status & machine_stack);
+  CHECK((trapped_status & status::kSie) == 0U);
+  CHECK((trapped_status & status::kSpie) != 0U);
+  CHECK((trapped_status & status::kSpp) == 0U);
+
+  const auto returned = csrs.return_from_trap(TrapReturnMode::Supervisor);
+  CHECK(returned.target == PrivilegeLevel::User);
+  CHECK_EQ(returned.pc, std::uint64_t{0x80000000});
+  const auto returned_status = read_value(csrs, csr::kMstatus);
+  CHECK((returned_status & status::kSie) != 0U);
+  CHECK((returned_status & status::kSpie) != 0U);
+  CHECK((returned_status & status::kSpp) == 0U);
+  CHECK((returned_status & status::kMprv) == 0U);
+}
+
+TEST_CASE("supervisor trap stack records an S-mode origin") {
+  CsrFile csrs;
+  CHECK(!csrs.write(csr::kMedeleg,
+                    std::uint64_t{1} <<
+                        static_cast<std::uint64_t>(TrapCause::EnvironmentCallFromSupervisorMode)));
+  const Trap trap{TrapCause::EnvironmentCallFromSupervisorMode, 0x80000040, 0,
+                  "supervisor ecall"};
+  const auto entry = csrs.enter_trap(trap, PrivilegeLevel::Supervisor);
+  CHECK(entry.target == PrivilegeLevel::Supervisor);
+  const auto trapped_status = read_value(csrs, csr::kMstatus);
+  CHECK((trapped_status & status::kSpp) != 0U);
+  CHECK((trapped_status & status::kSpie) == 0U);
+
+  const auto returned = csrs.return_from_trap(TrapReturnMode::Supervisor);
+  CHECK(returned.target == PrivilegeLevel::Supervisor);
+  CHECK_EQ(returned.pc, std::uint64_t{0x80000040});
+  const auto returned_status = read_value(csrs, csr::kMstatus);
+  CHECK((returned_status & status::kSie) == 0U);
+  CHECK((returned_status & status::kSpie) != 0U);
+  CHECK((returned_status & status::kSpp) == 0U);
+}
+
+TEST_CASE("machine traps never delegate and preserve supervisor trap state") {
+  CsrFile csrs;
+  constexpr auto supervisor_stack = status::kSie | status::kSpie | status::kSpp;
+  constexpr auto initial_status = supervisor_stack | status::kMie | status::kMprv;
+  constexpr auto machine_handler = std::uint64_t{0x80000200};
+  CHECK(!csrs.write(csr::kMstatus, initial_status));
+  CHECK(!csrs.write(csr::kMedeleg,
+                    std::uint64_t{1} <<
+                        static_cast<std::uint64_t>(TrapCause::IllegalInstruction)));
+  CHECK(!csrs.write(csr::kMtvec, machine_handler));
+  CHECK(!csrs.write(csr::kSepc, 0x4444, PrivilegeLevel::Supervisor));
+  CHECK(!csrs.write(csr::kScause, 0x5555, PrivilegeLevel::Supervisor));
+  CHECK(!csrs.write(csr::kStval, 0x6666, PrivilegeLevel::Supervisor));
+
+  const Trap trap{TrapCause::IllegalInstruction, 0x80000020, 0xffffffff,
+                  "machine illegal instruction"};
+  const auto entry = csrs.enter_trap(trap, PrivilegeLevel::Machine);
+  CHECK(entry.target == PrivilegeLevel::Machine);
+  CHECK_EQ(entry.vector, machine_handler);
+  CHECK_EQ(read_value(csrs, csr::kMepc), std::uint64_t{0x80000020});
+  CHECK_EQ(read_value(csrs, csr::kMcause),
+           static_cast<std::uint64_t>(TrapCause::IllegalInstruction));
+  CHECK_EQ(read_value(csrs, csr::kMtval), std::uint64_t{0xffffffff});
+  CHECK_EQ(read_value(csrs, csr::kSepc, PrivilegeLevel::Supervisor), std::uint64_t{0x4444});
+  CHECK_EQ(read_value(csrs, csr::kScause, PrivilegeLevel::Supervisor), std::uint64_t{0x5555});
+  CHECK_EQ(read_value(csrs, csr::kStval, PrivilegeLevel::Supervisor), std::uint64_t{0x6666});
+
+  const auto trapped_status = read_value(csrs, csr::kMstatus);
+  CHECK_EQ(trapped_status & supervisor_stack, initial_status & supervisor_stack);
+  CHECK((trapped_status & status::kMie) == 0U);
+  CHECK((trapped_status & status::kMpie) != 0U);
+  CHECK_EQ((trapped_status & status::kMppMask) >> 11U,
+           static_cast<std::uint64_t>(PrivilegeLevel::Machine));
+
+  const auto returned = csrs.return_from_trap(TrapReturnMode::Machine);
+  CHECK(returned.target == PrivilegeLevel::Machine);
+  CHECK_EQ(returned.pc, std::uint64_t{0x80000020});
+  const auto returned_status = read_value(csrs, csr::kMstatus);
+  CHECK((returned_status & status::kMie) != 0U);
+  CHECK((returned_status & status::kMpie) != 0U);
+  CHECK_EQ(returned_status & status::kMppMask, std::uint64_t{0});
+  CHECK((returned_status & status::kMprv) != 0U);
+}

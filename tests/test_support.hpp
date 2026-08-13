@@ -128,7 +128,10 @@ constexpr std::uint32_t encode_csr(std::uint8_t rd, std::uint8_t funct3, std::ui
          (static_cast<std::uint32_t>(rd) << 7U) | 0x73U;
 }
 
+inline constexpr std::uint32_t kEcall = 0x00000073U;
 inline constexpr std::uint32_t kEbreak = 0x00100073U;
+inline constexpr std::uint32_t kSret = 0x10200073U;
+inline constexpr std::uint32_t kMret = 0x30200073U;
 
 class CpuFixture {
 public:
@@ -170,4 +173,3 @@ public:
 #define CHECK_THROWS(exception, expression)                                                           \
   ::northstar64::test::check_throws<exception>([&] { (void)(expression); }, #expression, __FILE__,    \
                                                 __LINE__)
-

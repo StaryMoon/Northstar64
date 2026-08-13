@@ -318,7 +318,29 @@ std::optional<CsrError> CsrFile::write(std::uint16_t address, std::uint64_t valu
                     "CSR " + csr_hex(address) + " is not implemented");
 }
 
-void CsrFile::enter_trap(const Trap& trap, PrivilegeLevel origin) {
+TrapEntry CsrFile::enter_trap(const Trap& trap, PrivilegeLevel origin) {
+  const auto cause = static_cast<std::uint64_t>(trap.cause);
+  const bool delegated = origin != PrivilegeLevel::Machine && cause < 64U &&
+                         (medeleg_ & (std::uint64_t{1} << cause)) != 0U;
+  if (delegated) {
+    const bool supervisor_interrupt_enabled = (mstatus_ & status::kSie) != 0U;
+    if (supervisor_interrupt_enabled) {
+      mstatus_ |= status::kSpie;
+    } else {
+      mstatus_ &= ~status::kSpie;
+    }
+    mstatus_ &= ~status::kSie;
+    if (origin == PrivilegeLevel::Supervisor) {
+      mstatus_ |= status::kSpp;
+    } else {
+      mstatus_ &= ~status::kSpp;
+    }
+    sepc_ = trap.pc & ~std::uint64_t{0x3};
+    scause_ = cause;
+    stval_ = trap.value;
+    return TrapEntry{PrivilegeLevel::Supervisor, stvec_ & ~std::uint64_t{0x3}};
+  }
+
   const bool machine_interrupt_enabled = (mstatus_ & status::kMie) != 0U;
   if (machine_interrupt_enabled) {
     mstatus_ |= status::kMpie;
@@ -329,11 +351,33 @@ void CsrFile::enter_trap(const Trap& trap, PrivilegeLevel origin) {
   mstatus_ = (mstatus_ & ~status::kMppMask) |
              (static_cast<std::uint64_t>(origin) << 11U);
   mepc_ = trap.pc & ~std::uint64_t{0x3};
-  mcause_ = static_cast<std::uint64_t>(trap.cause);
+  mcause_ = cause;
   mtval_ = trap.value;
+  return TrapEntry{PrivilegeLevel::Machine, mtvec_ & ~std::uint64_t{0x3}};
 }
 
-Address CsrFile::return_from_trap() {
+TrapReturn CsrFile::return_from_trap(TrapReturnMode mode) {
+  if (mode == TrapReturnMode::Supervisor) {
+    const auto target = (mstatus_ & status::kSpp) != 0U ? PrivilegeLevel::Supervisor
+                                                        : PrivilegeLevel::User;
+    const bool previous_interrupt_enabled = (mstatus_ & status::kSpie) != 0U;
+    if (previous_interrupt_enabled) {
+      mstatus_ |= status::kSie;
+    } else {
+      mstatus_ &= ~status::kSie;
+    }
+    mstatus_ |= status::kSpie;
+    mstatus_ &= ~status::kSpp;
+    mstatus_ &= ~status::kMprv;
+    return TrapReturn{target, sepc_};
+  }
+
+  const auto mpp = static_cast<std::uint8_t>((mstatus_ & status::kMppMask) >> 11U);
+  const auto target = mpp == static_cast<std::uint8_t>(PrivilegeLevel::Machine)
+                          ? PrivilegeLevel::Machine
+                      : mpp == static_cast<std::uint8_t>(PrivilegeLevel::Supervisor)
+                          ? PrivilegeLevel::Supervisor
+                          : PrivilegeLevel::User;
   const bool previous_interrupt_enabled = (mstatus_ & status::kMpie) != 0U;
   if (previous_interrupt_enabled) {
     mstatus_ |= status::kMie;
@@ -342,7 +386,10 @@ Address CsrFile::return_from_trap() {
   }
   mstatus_ |= status::kMpie;
   mstatus_ &= ~status::kMppMask;
-  return mepc_;
+  if (target != PrivilegeLevel::Machine) {
+    mstatus_ &= ~status::kMprv;
+  }
+  return TrapReturn{target, mepc_};
 }
 
 } // namespace northstar64

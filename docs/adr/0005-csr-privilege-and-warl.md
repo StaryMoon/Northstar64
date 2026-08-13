@@ -27,3 +27,6 @@ unchanged.
 Access failures carry a structured reason and current privilege. The current PR does not delegate
 traps or implement `SRET`; lower-mode exceptions still enter M mode. Those transitions remain a
 separate contract so CSR access policy can be reviewed and tested independently.
+
+That separate transition contract was subsequently adopted in
+[ADR 0006](0006-delegated-traps-and-xret.md).

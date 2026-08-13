@@ -194,6 +194,8 @@ DecodeResult decode_system(std::uint32_t raw, std::uint8_t funct3) {
       return instruction(raw, Operation::Ecall);
     case 0x00100073U:
       return instruction(raw, Operation::Ebreak);
+    case 0x10200073U:
+      return instruction(raw, Operation::Sret);
     case 0x30200073U:
       return instruction(raw, Operation::Mret);
     case 0x10500073U:
@@ -328,6 +330,7 @@ const char* operation_name(Operation operation) noexcept {
     NORTHSTAR64_OPERATION_CASE(FenceI, "fence.i");
     NORTHSTAR64_OPERATION_CASE(Ecall, "ecall");
     NORTHSTAR64_OPERATION_CASE(Ebreak, "ebreak");
+    NORTHSTAR64_OPERATION_CASE(Sret, "sret");
     NORTHSTAR64_OPERATION_CASE(Mret, "mret");
     NORTHSTAR64_OPERATION_CASE(Wfi, "wfi");
     NORTHSTAR64_OPERATION_CASE(Csrrw, "csrrw");
@@ -438,6 +441,7 @@ std::string disassemble(const DecodedInstruction& decoded) {
   case Operation::FenceI:
   case Operation::Ecall:
   case Operation::Ebreak:
+  case Operation::Sret:
   case Operation::Mret:
   case Operation::Wfi:
     break;

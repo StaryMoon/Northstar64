@@ -130,11 +130,11 @@ void Cpu::raise_trap(StepRecord& record, TrapCause cause, std::uint64_t value,
   Trap trap{cause, record.pc, value, std::move(detail)};
   record.trap = trap;
   record.retired = false;
-  csrs_.enter_trap(trap, privilege_);
-  privilege_ = PrivilegeLevel::Machine;
+  const auto entry = csrs_.enter_trap(trap, privilege_);
+  privilege_ = entry.target;
 
-  if (config_.trap_policy == TrapPolicy::VectorToMtvec) {
-    pc_ = csrs_.trap_vector();
+  if (config_.trap_policy == TrapPolicy::Vector) {
+    pc_ = entry.vector;
   } else {
     pc_ = trap.pc;
     halted_ = true;
@@ -142,6 +142,7 @@ void Cpu::raise_trap(StepRecord& record, TrapCause cause, std::uint64_t value,
     terminal_trap_ = trap;
   }
   record.next_pc = pc_;
+  record.next_privilege = privilege_;
   record.halted = halted_;
 }
 
@@ -383,12 +384,20 @@ void Cpu::execute(StepRecord& record, const DecodedInstruction& instruction) {
   case Operation::FenceI:
     break;
   case Operation::Ecall:
-    raise_trap(record, TrapCause::EnvironmentCallFromMachineMode, 0,
-               "environment call executed in machine mode");
+    if (privilege_ == PrivilegeLevel::User) {
+      raise_trap(record, TrapCause::EnvironmentCallFromUserMode, 0,
+                 "environment call executed in user mode");
+    } else if (privilege_ == PrivilegeLevel::Supervisor) {
+      raise_trap(record, TrapCause::EnvironmentCallFromSupervisorMode, 0,
+                 "environment call executed in supervisor mode");
+    } else {
+      raise_trap(record, TrapCause::EnvironmentCallFromMachineMode, 0,
+                 "environment call executed in machine mode");
+    }
     return;
   case Operation::Ebreak:
     raise_trap(record, TrapCause::Breakpoint, 0, "EBREAK requested a debugger trap");
-    if (config_.halt_on_ebreak && config_.trap_policy == TrapPolicy::VectorToMtvec) {
+    if (config_.halt_on_ebreak && config_.trap_policy == TrapPolicy::Vector) {
       halted_ = true;
       pc_ = record.pc;
       halt_detail_ = "breakpoint: EBREAK requested a debugger trap";
@@ -397,8 +406,28 @@ void Cpu::execute(StepRecord& record, const DecodedInstruction& instruction) {
       record.halted = true;
     }
     return;
+  case Operation::Sret: {
+    if (privilege_ == PrivilegeLevel::User) {
+      raise_trap(record, TrapCause::IllegalInstruction, instruction.raw,
+                 "SRET requires supervisor or machine privilege");
+      return;
+    }
+    const auto transition = csrs_.return_from_trap(TrapReturnMode::Supervisor);
+    pc_ = transition.pc;
+    privilege_ = transition.target;
+    break;
+  }
   case Operation::Mret:
-    pc_ = csrs_.return_from_trap();
+    if (privilege_ != PrivilegeLevel::Machine) {
+      raise_trap(record, TrapCause::IllegalInstruction, instruction.raw,
+                 "MRET requires machine privilege");
+      return;
+    }
+    {
+      const auto transition = csrs_.return_from_trap(TrapReturnMode::Machine);
+      pc_ = transition.pc;
+      privilege_ = transition.target;
+    }
     break;
   case Operation::Wfi:
     if (config_.halt_on_wfi) {
@@ -447,6 +476,7 @@ void Cpu::execute(StepRecord& record, const DecodedInstruction& instruction) {
   if (!record.trap) {
     record.retired = true;
     record.next_pc = pc_;
+    record.next_privilege = privilege_;
     record.halted = halted_;
   }
 }
@@ -457,6 +487,7 @@ StepRecord Cpu::step() {
   record.pc = pc_;
   record.privilege = privilege_;
   record.next_pc = pc_;
+  record.next_privilege = privilege_;
   record.halted = halted_;
 
   if (halted_) {

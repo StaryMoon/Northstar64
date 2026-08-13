@@ -42,12 +42,19 @@ The CPU tracks:
 
 - 32 integer registers, with x0 enforced after every step
 - program counter
-- machine-mode CSR state
+- current M/S/U privilege and machine/supervisor CSR state
 - attempted-step sequence number
 - halted state and terminal trap
 
-Synchronous exceptions do not retire. The trap captures the faulting PC, and halt-mode execution
-leaves the PC at that instruction. Vector-mode execution writes trap CSRs and enters direct `mtvec`.
+Synchronous exceptions do not retire. The CSR state machine selects M or S according to origin and
+`medeleg`, atomically updates the selected trap bank and privilege stack, and returns a target mode
+and direct trap vector to the CPU. M-origin exceptions never delegate. Halt-mode execution leaves
+the PC at the faulting instruction after recording architectural trap state; vector-mode execution
+enters the selected direct `mtvec` or `stvec` address.
+
+`MRET` and `SRET` reverse the corresponding privilege stack before the CPU applies the returned PC
+and mode. Their legality is checked before any return state is mutated. Traces retain both the
+before and after privilege so trap and return edges can be inspected without an internal snapshot.
 
 ### Trace
 
@@ -60,10 +67,11 @@ unordered container is serialized.
 1. x0 always reads zero and never appears as a register write.
 2. Every mapped physical address belongs to at most one device.
 3. Instruction retirement occurs exactly once after successful execution.
-4. A synchronous trap preserves the faulting PC in `mepc`.
+4. A synchronous trap preserves the faulting PC in exactly one selected `xepc` trap bank.
 5. Failed ELF validation does not modify guest memory.
 6. The same machine state and deterministic inputs produce the same `StepRecord` sequence.
 7. The interpreter is the reference semantics for future optimized backends.
+8. An exception originating in M mode never delegates to S mode.
 
 ## Extension Points
 
@@ -72,4 +80,3 @@ unordered container is serialized.
 - event source consumed at instruction boundaries for record/replay
 - alternative execution backend checked against interpreter traces
 - debugger sink consuming `StepRecord` and state snapshots
-

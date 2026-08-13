@@ -20,8 +20,9 @@ breakpoint, and produces identical traces across repeated runs.
 
 ## 0.2 - Privilege and Virtual Memory
 
-- model M/S/U privilege transitions
-- supervisor CSRs and trap delegation
+- [x] model M/S/U privilege transitions
+- [x] supervisor CSRs and synchronous trap delegation
+- [x] implement precise `MRET`/`SRET` state restoration
 - implement Sv39 page-table walking and a software TLB
 - enforce R/W/X/U/A/D permissions and canonical virtual addresses
 - add `sfence.vma`
@@ -81,4 +82,3 @@ to the same state transitions.
 - multi-hart memory model experiments
 - tiered basic-block translation with interpreter differential testing
 - fuzzing of decoders, ELF images, page tables, and device state machines
-

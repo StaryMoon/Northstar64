@@ -12,7 +12,11 @@
 
 namespace northstar64 {
 
-enum class TrapPolicy { Halt, VectorToMtvec };
+enum class TrapPolicy {
+  Halt,
+  Vector,
+  VectorToMtvec = Vector,
+};
 
 struct CpuConfig {
   TrapPolicy trap_policy{TrapPolicy::Halt};
