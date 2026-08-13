@@ -58,6 +58,7 @@ enum class Operation {
   Sraw,
   Fence,
   FenceI,
+  SfenceVma,
   Ecall,
   Ebreak,
   Sret,

@@ -24,9 +24,9 @@ breakpoint, and produces identical traces across repeated runs.
 - [x] supervisor CSRs and synchronous trap delegation
 - [x] implement precise `MRET`/`SRET` state restoration
 - [x] implement an independent Sv39 page-table walker
-- connect CPU virtual accesses and add a software TLB
+- [x] connect CPU fetch/load/store and define `SFENCE.VMA`
+- add a software TLB
 - enforce R/W/X/U/A/D permissions and canonical virtual addresses
-- add `sfence.vma`
 - differential page-table tests against an independent reference walker
 
 Exit criterion: a supervisor guest enters user mode, faults on forbidden memory, handles the trap,

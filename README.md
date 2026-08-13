@@ -23,7 +23,7 @@ RV64 ELF  ->  strict loader  ->  sparse physical bus  ->  decode/execute  ->  UA
 - RV64I integer instructions, including the RV64 word operations
 - `Zicsr` CSR instructions with explicit M/S/U privilege and address-derived access checks
 - precise delegated synchronous trap entry through direct `stvec`/`mtvec`, plus `SRET`/`MRET`
-- an independently testable Sv39 walker with typed faults, superpages, and permission checks
+- Sv39 translation for S/U instruction fetches, loads, and stores, backed by an independent walker
 - `Zifencei` decode/execution semantics for a single-hart interpreter
 - precise illegal-instruction, fetch, load, store, alignment, breakpoint, and `ecall` traps
 - a non-overlapping memory bus, sparse zero-filled RAM, and a byte-access 16550 UART model
@@ -118,10 +118,10 @@ and [the determinism model](docs/determinism.md) before extending the machine.
 
 Northstar64 is not yet a complete RISC-V platform and does not currently boot Linux. The `v0.1.0`
 release is a machine-mode baseline. Current `main` adds explicit M/S/U state, supervisor CSRs,
-delegated synchronous traps, precise return transitions, and a standalone Sv39 reference walker.
-CPU fetch/load/store paths are not connected to that walker yet, so the machine still executes with
-physical addresses. It also has no asynchronous interrupts, floating point, atomics, compressed
-instructions, or block device. It has not yet passed the upstream `riscv-arch-test` suite.
+delegated synchronous traps, precise return transitions, and Sv39 translation for S/U fetch, load,
+and store accesses. It still has no TLB, asynchronous interrupts, floating point, atomics,
+compressed instructions, or block device. It has not yet passed the upstream `riscv-arch-test`
+suite.
 
 Those are roadmap items, not implied features. See [ROADMAP.md](ROADMAP.md) for the order in which
 they will be added and the evidence required for each milestone.

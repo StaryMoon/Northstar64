@@ -25,8 +25,16 @@ struct MemoryWrite {
   Address address{};
   std::size_t width{};
   std::uint64_t value{};
+  Address physical_address{};
 
   friend bool operator==(const MemoryWrite&, const MemoryWrite&) = default;
+};
+
+struct AddressTranslation {
+  Address virtual_address{};
+  Address physical_address{};
+
+  friend bool operator==(const AddressTranslation&, const AddressTranslation&) = default;
 };
 
 struct StepRecord {
@@ -42,6 +50,8 @@ struct StepRecord {
   std::optional<RegisterWrite> register_write;
   std::optional<MemoryWrite> memory_write;
   std::optional<Trap> trap;
+  std::optional<AddressTranslation> instruction_translation;
+  std::optional<AddressTranslation> data_translation;
 
   friend bool operator==(const StepRecord&, const StepRecord&) = default;
 };

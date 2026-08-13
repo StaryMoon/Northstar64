@@ -128,6 +128,11 @@ constexpr std::uint32_t encode_csr(std::uint8_t rd, std::uint8_t funct3, std::ui
          (static_cast<std::uint32_t>(rd) << 7U) | 0x73U;
 }
 
+constexpr std::uint32_t encode_sfence_vma(std::uint8_t rs1, std::uint8_t rs2) {
+  return 0x12000073U | (static_cast<std::uint32_t>(rs1) << 15U) |
+         (static_cast<std::uint32_t>(rs2) << 20U);
+}
+
 inline constexpr std::uint32_t kEcall = 0x00000073U;
 inline constexpr std::uint32_t kEbreak = 0x00100073U;
 inline constexpr std::uint32_t kSret = 0x10200073U;

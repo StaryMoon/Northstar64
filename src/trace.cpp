@@ -90,13 +90,32 @@ std::string format_trace_record(const StepRecord& record) {
   } else {
     output << "null";
   }
+  output << ",\"instruction_translation\":";
+  if (record.instruction_translation) {
+    output << "{\"virtual_address\":\""
+           << hex_value(record.instruction_translation->virtual_address, 16)
+           << "\",\"physical_address\":\""
+           << hex_value(record.instruction_translation->physical_address, 16) << "\"}";
+  } else {
+    output << "null";
+  }
+  output << ",\"data_translation\":";
+  if (record.data_translation) {
+    output << "{\"virtual_address\":\""
+           << hex_value(record.data_translation->virtual_address, 16)
+           << "\",\"physical_address\":\""
+           << hex_value(record.data_translation->physical_address, 16) << "\"}";
+  } else {
+    output << "null";
+  }
   output << ",\"memory_write\":";
   if (record.memory_write) {
     output << "{\"address\":\"" << hex_value(record.memory_write->address, 16)
            << "\",\"width\":" << record.memory_write->width << ",\"value\":\""
            << hex_value(record.memory_write->value,
                         static_cast<unsigned>(record.memory_write->width * 2U))
-           << "\"}";
+           << "\",\"physical_address\":\""
+           << hex_value(record.memory_write->physical_address, 16) << "\"}";
   } else {
     output << "null";
   }

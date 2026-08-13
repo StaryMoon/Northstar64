@@ -19,6 +19,9 @@ enum class TrapCause : std::uint64_t {
   EnvironmentCallFromUserMode = 8,
   EnvironmentCallFromSupervisorMode = 9,
   EnvironmentCallFromMachineMode = 11,
+  InstructionPageFault = 12,
+  LoadPageFault = 13,
+  StorePageFault = 15,
 };
 
 struct Trap {
@@ -33,4 +36,3 @@ struct Trap {
 const char* trap_name(TrapCause cause) noexcept;
 
 } // namespace northstar64
-
