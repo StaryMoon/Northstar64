@@ -80,6 +80,7 @@ std::string format_trace_record(const StepRecord& record) {
          << "\",\"privilege\":\"" << privilege_name(record.privilege)
          << "\",\"instruction\":\"" << hex_value(record.instruction, 8) << "\",\"assembly\":\""
          << escape_json(record.assembly) << "\",\"next_pc\":\"" << hex_value(record.next_pc, 16)
+         << "\",\"next_privilege\":\"" << privilege_name(record.next_privilege)
          << "\",\"retired\":" << (record.retired ? "true" : "false")
          << ",\"halted\":" << (record.halted ? "true" : "false") << ",\"register_write\":";
 

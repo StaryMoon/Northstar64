@@ -44,10 +44,14 @@ TEST_CASE("decoder rejects compressed and extension encodings") {
 }
 
 TEST_CASE("decoder accepts machine control and CSR instructions") {
-  CHECK(std::get<DecodedInstruction>(decode(0x30200073U)).operation == Operation::Mret);
+  const auto sret = std::get<DecodedInstruction>(decode(kSret));
+  CHECK(sret.operation == Operation::Sret);
+  CHECK_EQ(disassemble(sret), std::string("sret"));
+  const auto mret = std::get<DecodedInstruction>(decode(kMret));
+  CHECK(mret.operation == Operation::Mret);
+  CHECK_EQ(disassemble(mret), std::string("mret"));
   const auto csr_instruction =
       std::get<DecodedInstruction>(decode(encode_csr(2, 1, 3, csr::kMtvec)));
   CHECK(csr_instruction.operation == Operation::Csrrw);
   CHECK_EQ(csr_instruction.csr, csr::kMtvec);
 }
-

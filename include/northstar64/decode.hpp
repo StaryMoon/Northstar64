@@ -60,6 +60,7 @@ enum class Operation {
   FenceI,
   Ecall,
   Ebreak,
+  Sret,
   Mret,
   Wfi,
   Csrrw,
@@ -94,4 +95,3 @@ std::string disassemble(const DecodedInstruction& instruction);
 const char* operation_name(Operation operation) noexcept;
 
 } // namespace northstar64
-

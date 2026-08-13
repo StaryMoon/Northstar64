@@ -21,7 +21,8 @@ RV64 ELF  ->  strict loader  ->  sparse physical bus  ->  decode/execute  ->  UA
 ## What Works
 
 - RV64I integer instructions, including the RV64 word operations
-- `Zicsr` machine-mode CSR instructions and direct `mtvec` trap entry
+- `Zicsr` CSR instructions with explicit M/S/U privilege and address-derived access checks
+- precise delegated synchronous trap entry through direct `stvec`/`mtvec`, plus `SRET`/`MRET`
 - `Zifencei` decode/execution semantics for a single-hart interpreter
 - precise illegal-instruction, fetch, load, store, alignment, breakpoint, and `ecall` traps
 - a non-overlapping memory bus, sparse zero-filled RAM, and a byte-access 16550 UART model
@@ -84,12 +85,12 @@ Every attempted step distinguishes three states:
 
 1. **Attempted**: the clock advances and an instruction fetch is attempted.
 2. **Retired**: decode and execution complete without a synchronous exception.
-3. **Trapped**: the faulting PC and value are recorded in `mepc`/`mtval`; the instruction does not
-   retire.
+3. **Trapped**: the faulting PC and value are recorded in the selected supervisor or machine trap
+   bank; the instruction does not retire.
 
-The JSONL trace records the PC, raw instruction, disassembly, next PC, register write, memory write,
-and trap outcome in a stable field order. Wall-clock time is deliberately absent, so equal inputs
-produce equal evidence.
+The JSONL trace records the PC, privilege before execution, raw instruction, disassembly, next PC,
+privilege after execution, register write, memory write, and trap outcome in a stable field order.
+Wall-clock time is deliberately absent, so equal inputs produce equal evidence.
 
 ## Architecture
 
@@ -98,7 +99,7 @@ flowchart LR
   CLI[CLI / debugger surface] --> ELF[Strict ELF64 loader]
   ELF --> BUS[Physical memory bus]
   CPU[RV64 decode + execute] <--> BUS
-  CPU <--> CSR[Machine CSRs + exact traps]
+  CPU <--> CSR[M/S CSRs + privilege transitions]
   BUS <--> RAM[Sparse RAM]
   BUS <--> UART[16550 UART]
   CPU --> TRACE[Deterministic JSONL trace]
@@ -114,9 +115,10 @@ and [the determinism model](docs/determinism.md) before extending the machine.
 
 ## Current Boundary
 
-Northstar64 is not yet a complete RISC-V platform and does not currently boot Linux. Version 0.1
-is intentionally limited to one RV64 hart in machine mode. It has no virtual memory, asynchronous
-interrupts, supervisor/user privilege, floating point, atomics, compressed instructions, or block
+Northstar64 is not yet a complete RISC-V platform and does not currently boot Linux. The `v0.1.0`
+release is a machine-mode baseline. Current `main` adds explicit M/S/U state, supervisor CSRs,
+delegated synchronous traps, and precise return transitions, but it still has no address
+translation, asynchronous interrupts, floating point, atomics, compressed instructions, or block
 device. It has not yet passed the upstream `riscv-arch-test` suite.
 
 Those are roadmap items, not implied features. See [ROADMAP.md](ROADMAP.md) for the order in which
@@ -141,4 +143,3 @@ or ADR. See [CONTRIBUTING.md](CONTRIBUTING.md) for the local checks and review c
 ## License
 
 Northstar64 is available under the [MIT License](LICENSE).
-

@@ -148,14 +148,14 @@ TEST_CASE("nonzero CSRRS attempts to write read-only state") {
 
 TEST_CASE("vectored trap policy enters mtvec and mret resumes") {
   CpuConfig config;
-  config.trap_policy = TrapPolicy::VectorToMtvec;
+  config.trap_policy = TrapPolicy::Vector;
   config.halt_on_ebreak = false;
   CpuFixture fixture(config);
   const auto handler = CpuFixture::kBase + 0x100;
   CHECK(!fixture.cpu_.csrs().write(csr::kMtvec, handler));
-  fixture.load_words({0x00000073U});
+  fixture.load_words({kEcall});
   fixture.load_words({encode_csr(1, 2, 0, csr::kMepc), encode_i(0x13, 1, 0, 1, 4),
-                      encode_csr(0, 1, 1, csr::kMepc), 0x30200073U},
+                      encode_csr(0, 1, 1, csr::kMepc), kMret},
                      handler);
 
   auto trap_record = fixture.cpu_.step();
@@ -167,6 +167,238 @@ TEST_CASE("vectored trap policy enters mtvec and mret resumes") {
   CHECK(fixture.cpu_.step().retired);
   CHECK(fixture.cpu_.step().retired);
   CHECK_EQ(fixture.cpu_.pc(), CpuFixture::kBase + 4);
+}
+
+TEST_CASE("delegated user ECALL enters supervisor mode and SRET resumes user mode") {
+  CpuConfig config;
+  config.trap_policy = TrapPolicy::Vector;
+  config.halt_on_ebreak = false;
+  CpuFixture fixture(config);
+  const auto handler = CpuFixture::kBase + 0x100;
+  constexpr auto machine_state = status::kMie | status::kMpie | status::kMppMask;
+  CHECK(!fixture.cpu_.csrs().write(csr::kMstatus, machine_state | status::kSie));
+  CHECK(!fixture.cpu_.csrs().write(
+      csr::kMedeleg,
+      std::uint64_t{1} <<
+          static_cast<std::uint64_t>(TrapCause::EnvironmentCallFromUserMode)));
+  CHECK(!fixture.cpu_.csrs().write(csr::kStvec, handler, PrivilegeLevel::Supervisor));
+  CHECK(!fixture.cpu_.csrs().write(csr::kMepc, 0x1110));
+  CHECK(!fixture.cpu_.csrs().write(csr::kMcause, 0x2222));
+  CHECK(!fixture.cpu_.csrs().write(csr::kMtval, 0x3333));
+  fixture.cpu_.set_privilege(PrivilegeLevel::User);
+  fixture.load_words({kEcall});
+  fixture.load_words({encode_csr(1, 2, 0, csr::kSepc), encode_i(0x13, 1, 0, 1, 4),
+                      encode_csr(0, 1, 1, csr::kSepc), kSret},
+                     handler);
+
+  const auto trap_record = fixture.cpu_.step();
+  CHECK(trap_record.privilege == PrivilegeLevel::User);
+  CHECK(trap_record.next_privilege == PrivilegeLevel::Supervisor);
+  CHECK(trap_record.trap.has_value());
+  CHECK(trap_record.trap->cause == TrapCause::EnvironmentCallFromUserMode);
+  CHECK(!trap_record.retired);
+  CHECK(fixture.cpu_.privilege() == PrivilegeLevel::Supervisor);
+  CHECK_EQ(fixture.cpu_.pc(), handler);
+  CHECK_EQ(std::get<std::uint64_t>(fixture.cpu_.csrs().read(
+               csr::kScause, PrivilegeLevel::Supervisor)),
+           static_cast<std::uint64_t>(TrapCause::EnvironmentCallFromUserMode));
+  CHECK_EQ(std::get<std::uint64_t>(fixture.cpu_.csrs().read(csr::kMepc)),
+           std::uint64_t{0x1110});
+  CHECK_EQ(std::get<std::uint64_t>(fixture.cpu_.csrs().read(csr::kMcause)),
+           std::uint64_t{0x2222});
+  CHECK_EQ(std::get<std::uint64_t>(fixture.cpu_.csrs().read(csr::kMtval)),
+           std::uint64_t{0x3333});
+  const auto trapped_status =
+      std::get<std::uint64_t>(fixture.cpu_.csrs().read(csr::kMstatus));
+  CHECK_EQ(trapped_status & machine_state, machine_state);
+  CHECK((trapped_status & status::kSie) == 0U);
+  CHECK((trapped_status & status::kSpie) != 0U);
+  CHECK((trapped_status & status::kSpp) == 0U);
+
+  CHECK(fixture.cpu_.step().retired);
+  CHECK(fixture.cpu_.step().retired);
+  CHECK(fixture.cpu_.step().retired);
+  const auto return_record = fixture.cpu_.step();
+  CHECK(return_record.retired);
+  CHECK(return_record.privilege == PrivilegeLevel::Supervisor);
+  CHECK(return_record.next_privilege == PrivilegeLevel::User);
+  CHECK(fixture.cpu_.privilege() == PrivilegeLevel::User);
+  CHECK_EQ(fixture.cpu_.pc(), CpuFixture::kBase + 4);
+  CHECK_EQ(fixture.cpu_.csrs().retired_count(), std::uint64_t{4});
+}
+
+TEST_CASE("non-delegated user ECALL enters machine mode and MRET resumes user mode") {
+  CpuConfig config;
+  config.trap_policy = TrapPolicy::Vector;
+  config.halt_on_ebreak = false;
+  CpuFixture fixture(config);
+  const auto handler = CpuFixture::kBase + 0x100;
+  CHECK(!fixture.cpu_.csrs().write(csr::kMtvec, handler));
+  CHECK(!fixture.cpu_.csrs().write(csr::kMstatus, status::kMie | status::kMprv));
+  fixture.cpu_.set_privilege(PrivilegeLevel::User);
+  fixture.load_words({kEcall});
+  fixture.load_words({encode_csr(1, 2, 0, csr::kMepc), encode_i(0x13, 1, 0, 1, 4),
+                      encode_csr(0, 1, 1, csr::kMepc), kMret},
+                     handler);
+
+  const auto trap_record = fixture.cpu_.step();
+  CHECK(trap_record.trap.has_value());
+  CHECK(trap_record.trap->cause == TrapCause::EnvironmentCallFromUserMode);
+  CHECK(trap_record.next_privilege == PrivilegeLevel::Machine);
+  CHECK(!trap_record.retired);
+  const auto trapped_status =
+      std::get<std::uint64_t>(fixture.cpu_.csrs().read(csr::kMstatus));
+  CHECK((trapped_status & status::kMie) == 0U);
+  CHECK((trapped_status & status::kMpie) != 0U);
+  CHECK_EQ((trapped_status & status::kMppMask) >> 11U,
+           static_cast<std::uint64_t>(PrivilegeLevel::User));
+
+  CHECK(fixture.cpu_.step().retired);
+  CHECK(fixture.cpu_.step().retired);
+  CHECK(fixture.cpu_.step().retired);
+  const auto return_record = fixture.cpu_.step();
+  CHECK(return_record.retired);
+  CHECK(return_record.next_privilege == PrivilegeLevel::User);
+  CHECK(fixture.cpu_.privilege() == PrivilegeLevel::User);
+  CHECK_EQ(fixture.cpu_.pc(), CpuFixture::kBase + 4);
+  const auto returned_status =
+      std::get<std::uint64_t>(fixture.cpu_.csrs().read(csr::kMstatus));
+  CHECK((returned_status & status::kMie) != 0U);
+  CHECK((returned_status & status::kMpie) != 0U);
+  CHECK_EQ(returned_status & status::kMppMask, std::uint64_t{0});
+  CHECK((returned_status & status::kMprv) == 0U);
+  CHECK_EQ(fixture.cpu_.csrs().retired_count(), std::uint64_t{4});
+}
+
+TEST_CASE("supervisor ECALL enters machine mode and MRET restores supervisor mode") {
+  CpuConfig config;
+  config.trap_policy = TrapPolicy::Vector;
+  config.halt_on_ebreak = false;
+  CpuFixture fixture(config);
+  const auto handler = CpuFixture::kBase + 0x100;
+  CHECK(!fixture.cpu_.csrs().write(csr::kMtvec, handler));
+  CHECK(!fixture.cpu_.csrs().write(csr::kMstatus, status::kMprv));
+  fixture.cpu_.set_privilege(PrivilegeLevel::Supervisor);
+  fixture.load_words({kEcall});
+  fixture.load_words({encode_csr(1, 2, 0, csr::kMepc), encode_i(0x13, 1, 0, 1, 4),
+                      encode_csr(0, 1, 1, csr::kMepc), kMret},
+                     handler);
+
+  const auto trap_record = fixture.cpu_.step();
+  CHECK(trap_record.trap.has_value());
+  CHECK(trap_record.trap->cause == TrapCause::EnvironmentCallFromSupervisorMode);
+  CHECK(trap_record.next_privilege == PrivilegeLevel::Machine);
+  const auto trapped_status =
+      std::get<std::uint64_t>(fixture.cpu_.csrs().read(csr::kMstatus));
+  CHECK_EQ((trapped_status & status::kMppMask) >> 11U,
+           static_cast<std::uint64_t>(PrivilegeLevel::Supervisor));
+
+  CHECK(fixture.cpu_.step().retired);
+  CHECK(fixture.cpu_.step().retired);
+  CHECK(fixture.cpu_.step().retired);
+  const auto return_record = fixture.cpu_.step();
+  CHECK(return_record.retired);
+  CHECK(return_record.next_privilege == PrivilegeLevel::Supervisor);
+  CHECK(fixture.cpu_.privilege() == PrivilegeLevel::Supervisor);
+  CHECK_EQ(fixture.cpu_.pc(), CpuFixture::kBase + 4);
+  const auto returned_status =
+      std::get<std::uint64_t>(fixture.cpu_.csrs().read(csr::kMstatus));
+  CHECK((returned_status & status::kMprv) == 0U);
+}
+
+TEST_CASE("machine-origin traps ignore exception delegation") {
+  CpuConfig config;
+  config.trap_policy = TrapPolicy::Vector;
+  CpuFixture fixture(config);
+  const auto machine_handler = CpuFixture::kBase + 0x100;
+  const auto supervisor_handler = CpuFixture::kBase + 0x200;
+  CHECK(!fixture.cpu_.csrs().write(csr::kMtvec, machine_handler));
+  CHECK(!fixture.cpu_.csrs().write(csr::kStvec, supervisor_handler,
+                                   PrivilegeLevel::Supervisor));
+  CHECK(!fixture.cpu_.csrs().write(
+      csr::kMedeleg,
+      std::uint64_t{1} << static_cast<std::uint64_t>(TrapCause::IllegalInstruction)));
+  fixture.load_words({0xffffffffU});
+
+  const auto record = fixture.cpu_.step();
+  CHECK(record.trap.has_value());
+  CHECK(record.trap->cause == TrapCause::IllegalInstruction);
+  CHECK(record.next_privilege == PrivilegeLevel::Machine);
+  CHECK(fixture.cpu_.privilege() == PrivilegeLevel::Machine);
+  CHECK_EQ(fixture.cpu_.pc(), machine_handler);
+}
+
+TEST_CASE("ECALL reports its originating privilege without retirement") {
+  struct Case {
+    PrivilegeLevel privilege;
+    TrapCause cause;
+  };
+  constexpr Case cases[] = {
+      {PrivilegeLevel::User, TrapCause::EnvironmentCallFromUserMode},
+      {PrivilegeLevel::Supervisor, TrapCause::EnvironmentCallFromSupervisorMode},
+      {PrivilegeLevel::Machine, TrapCause::EnvironmentCallFromMachineMode},
+  };
+  for (const auto& test_case : cases) {
+    CpuFixture fixture;
+    fixture.cpu_.set_privilege(test_case.privilege);
+    fixture.load_words({kEcall});
+    const auto record = fixture.cpu_.step();
+    CHECK(record.trap.has_value());
+    CHECK(record.trap->cause == test_case.cause);
+    CHECK(!record.retired);
+    CHECK_EQ(fixture.cpu_.csrs().retired_count(), std::uint64_t{0});
+  }
+}
+
+TEST_CASE("MRET below machine mode traps as an illegal instruction") {
+  constexpr PrivilegeLevel lower_modes[] = {PrivilegeLevel::User,
+                                             PrivilegeLevel::Supervisor};
+  for (const auto mode : lower_modes) {
+    CpuFixture fixture;
+    fixture.cpu_.set_privilege(mode);
+    fixture.load_words({kMret});
+    const auto record = fixture.cpu_.step();
+    CHECK(record.trap.has_value());
+    CHECK(record.trap->cause == TrapCause::IllegalInstruction);
+    CHECK_EQ(record.trap->value, static_cast<std::uint64_t>(kMret));
+    CHECK(!record.retired);
+    CHECK(fixture.cpu_.privilege() == PrivilegeLevel::Machine);
+    CHECK_EQ(fixture.cpu_.csrs().retired_count(), std::uint64_t{0});
+  }
+}
+
+TEST_CASE("SRET in user mode traps while machine mode may execute SRET") {
+  {
+    CpuFixture fixture;
+    fixture.cpu_.set_privilege(PrivilegeLevel::User);
+    fixture.load_words({kSret});
+    const auto record = fixture.cpu_.step();
+    CHECK(record.trap.has_value());
+    CHECK(record.trap->cause == TrapCause::IllegalInstruction);
+    CHECK_EQ(record.trap->value, static_cast<std::uint64_t>(kSret));
+    CHECK(!record.retired);
+    CHECK_EQ(fixture.cpu_.csrs().retired_count(), std::uint64_t{0});
+  }
+  {
+    CpuFixture fixture;
+    CHECK(!fixture.cpu_.csrs().write(csr::kSepc, CpuFixture::kBase + 0x80,
+                                     PrivilegeLevel::Supervisor));
+    CHECK(!fixture.cpu_.csrs().write(csr::kMstatus,
+                                     status::kSpie | status::kSpp | status::kMprv));
+    fixture.load_words({kSret});
+    const auto record = fixture.cpu_.step();
+    CHECK(record.retired);
+    CHECK(!record.trap);
+    CHECK(record.next_privilege == PrivilegeLevel::Supervisor);
+    CHECK(fixture.cpu_.privilege() == PrivilegeLevel::Supervisor);
+    CHECK_EQ(fixture.cpu_.pc(), CpuFixture::kBase + 0x80);
+    const auto returned_status =
+        std::get<std::uint64_t>(fixture.cpu_.csrs().read(csr::kMstatus));
+    CHECK((returned_status & status::kSie) != 0U);
+    CHECK((returned_status & status::kSpie) != 0U);
+    CHECK((returned_status & status::kSpp) == 0U);
+    CHECK((returned_status & status::kMprv) == 0U);
+  }
 }
 
 TEST_CASE("step limits remain distinct from architectural halts") {

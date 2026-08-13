@@ -36,6 +36,7 @@ struct StepRecord {
   std::uint32_t instruction{};
   std::string assembly;
   Address next_pc{};
+  PrivilegeLevel next_privilege{PrivilegeLevel::Machine};
   bool retired{};
   bool halted{};
   std::optional<RegisterWrite> register_write;

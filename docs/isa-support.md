@@ -15,11 +15,19 @@
 | Zicsr | six CSR read/modify/write instructions |
 | Privileged subset | `ECALL`, `EBREAK`, `MRET`, `WFI`, direct machine trap entry |
 
-The development branch after 0.1 also models current M/S/U privilege, enforces CSR address-encoded
-access rules, exposes the supervisor CSR bank (`sstatus`, `sie`, `stvec`, `scounteren`, trap state,
-`sip`, and `satp`), and gates user counter reads through both machine and supervisor enable state.
-The `SXL`/`UXL` fields are fixed to 64 bits. `satp` accepts Bare and Sv39; unsupported modes leave
-the whole register unchanged as required by its WARL contract.
+## Implemented on `main` toward 0.2
+
+The development branch models current M/S/U privilege, enforces CSR address-encoded access rules,
+and exposes the supervisor CSR bank (`sstatus`, `sie`, `stvec`, `scounteren`, trap state, `sip`, and
+`satp`). User counter reads pass through both machine and supervisor enable state. The `SXL`/`UXL`
+fields are fixed to 64 bits. `satp` accepts Bare and Sv39 state encodings; address translation has not
+landed yet.
+
+Synchronous exceptions consult `medeleg` only when they originate below M mode. Delegated traps
+write `sepc/scause/stval`, enter direct `stvec`, and update `SIE/SPIE/SPP`. All other traps write the
+machine bank, enter direct `mtvec`, and update `MIE/MPIE/MPP`. `ECALL` reports cause 8, 9, or 11 for
+U, S, or M origin. `SRET` and `MRET` restore their interrupt-enable and previous-privilege stacks;
+illegal lower-privilege execution traps without retiring.
 
 The advertised machine ISA is `RV64I_Zicsr_Zifencei`. The current `misa` value reports RV64 with
 the `I` bit; `Zicsr` and `Zifencei` are not represented by legacy `misa` extension letters.
@@ -27,12 +35,9 @@ the `I` bit; `Zicsr` and `Zifencei` are not represented by legacy `misa` extensi
 ## Intentional Constraints
 
 - exactly one hart
-- trap delegation and supervisor return are not yet connected; synchronous traps currently enter M
-  mode even when they originate in S/U mode
-- all `ecall` instructions currently report machine-mode cause 11 until origin-aware trap routing lands
 - four-byte instruction alignment because the C extension is absent
 - naturally aligned multi-byte loads and stores
-- direct `mtvec` mode only
+- direct `mtvec`/`stvec` mode only
 - no asynchronous interrupt source in 0.1
 - `WFI` is a configurable host stop point until interrupts exist
 - `FENCE`/`FENCE.I` retire as no-ops because there is one interpreter hart and no instruction cache
@@ -40,9 +45,9 @@ the `I` bit; `Zicsr` and `Zifencei` are not represented by legacy `misa` extensi
 ## Unsupported
 
 - M, A, F, D, C, V, and bit-manipulation extensions
-- S/U modes and hypervisor state
-- Sv39/Sv48 virtual memory
-- delegated traps and interrupt prioritization
+- Sv39/Sv48 address translation and TLB behavior
+- asynchronous interrupt prioritization and delivery
+- hypervisor state
 - performance counters beyond deterministic `mcycle` and `minstret`
 - upstream architectural compliance status
 

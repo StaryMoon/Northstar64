@@ -17,6 +17,10 @@ performance or a stable trace schema across major versions.
 - stable JSON field ordering and fixed-width architecture values
 - no pointer values or host-dependent type names in the trace
 
+Each attempted step records both `privilege` and `next_privilege`. Equal values describe an
+ordinary instruction or an in-mode trap; a different pair exposes a trap-entry or xRET privilege
+edge directly. The 0.2 development schema inserts `next_privilege` immediately after `next_pc`.
+
 ## Comparison
 
 `verify-trace` compares streams without loading them into memory and reports the first different line.
@@ -39,4 +43,3 @@ event sequence | injection boundary | device | payload | integrity digest
 
 Replay will consume events only at recorded instruction boundaries. The trace will record event-log
 identity, while event payloads remain separate so large packets do not inflate every step record.
-

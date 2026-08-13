@@ -81,6 +81,25 @@ struct CsrError {
 
 using CsrReadResult = std::variant<std::uint64_t, CsrError>;
 
+struct TrapEntry {
+  PrivilegeLevel target{PrivilegeLevel::Machine};
+  Address vector{};
+
+  friend bool operator==(const TrapEntry&, const TrapEntry&) = default;
+};
+
+enum class TrapReturnMode {
+  Supervisor,
+  Machine,
+};
+
+struct TrapReturn {
+  PrivilegeLevel target{PrivilegeLevel::Machine};
+  Address pc{};
+
+  friend bool operator==(const TrapReturn&, const TrapReturn&) = default;
+};
+
 constexpr PrivilegeLevel csr_minimum_privilege(std::uint16_t address) noexcept {
   const auto encoded = static_cast<std::uint8_t>((address >> 8U) & 0x3U);
   if (encoded == 0U) {
@@ -109,11 +128,9 @@ public:
 
   void tick_cycle() noexcept { ++mcycle_; }
   void retire_instruction() noexcept { ++minstret_; }
-  void enter_trap(const Trap& trap,
-                  PrivilegeLevel origin = PrivilegeLevel::Machine);
-  [[nodiscard]] Address return_from_trap();
-
-  [[nodiscard]] Address trap_vector() const noexcept { return mtvec_ & ~std::uint64_t{0x3}; }
+  [[nodiscard]] TrapEntry enter_trap(
+      const Trap& trap, PrivilegeLevel origin = PrivilegeLevel::Machine);
+  [[nodiscard]] TrapReturn return_from_trap(TrapReturnMode mode);
   [[nodiscard]] std::uint64_t cycle_count() const noexcept { return mcycle_; }
   [[nodiscard]] std::uint64_t retired_count() const noexcept { return minstret_; }
 

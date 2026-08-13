@@ -36,6 +36,7 @@ TEST_CASE("trace records have stable ordered JSON fields") {
   record.instruction = 0x02a00093;
   record.assembly = "addi x1, x0, 42";
   record.next_pc = 0x80000004;
+  record.next_privilege = PrivilegeLevel::User;
   record.retired = true;
   record.register_write = RegisterWrite{1, 42};
 
@@ -45,6 +46,7 @@ TEST_CASE("trace records have stable ordered JSON fields") {
       "\"instruction\":\"0x02a00093\""));
   CHECK(formatted.find("\"register_write\":{\"index\":1,\"value\":\"0x000000000000002a\"}") !=
         std::string::npos);
+  CHECK(formatted.find("\"next_privilege\":\"U\"") != std::string::npos);
   CHECK(formatted.ends_with("\"trap\":null}"));
 }
 
