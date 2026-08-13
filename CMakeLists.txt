@@ -24,6 +24,7 @@ add_library(
   src/elf.cpp
   src/machine.cpp
   src/memory.cpp
+  src/privilege.cpp
   src/trace.cpp
   src/trap.cpp
   src/uart.cpp
@@ -83,6 +84,7 @@ if(NORTHSTAR64_BUILD_TESTS)
     northstar64_tests
     tests/test_main.cpp
     tests/test_cpu.cpp
+    tests/test_csr.cpp
     tests/test_decode.cpp
     tests/test_elf.cpp
     tests/test_memory.cpp

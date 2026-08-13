@@ -42,6 +42,8 @@ public:
   void set_reg(std::size_t index, RegisterValue value);
   [[nodiscard]] Address pc() const noexcept { return pc_; }
   void set_pc(Address value) noexcept { pc_ = value; }
+  [[nodiscard]] PrivilegeLevel privilege() const noexcept { return privilege_; }
+  void set_privilege(PrivilegeLevel privilege) noexcept { privilege_ = privilege; }
   [[nodiscard]] bool halted() const noexcept { return halted_; }
   [[nodiscard]] const std::string& halt_detail() const noexcept { return halt_detail_; }
   [[nodiscard]] CsrFile& csrs() noexcept { return csrs_; }
@@ -61,6 +63,7 @@ private:
   CpuConfig config_;
   std::array<RegisterValue, kRegisterCount> registers_{};
   Address pc_{};
+  PrivilegeLevel privilege_{PrivilegeLevel::Machine};
   CsrFile csrs_;
   std::uint64_t sequence_{};
   bool halted_{};

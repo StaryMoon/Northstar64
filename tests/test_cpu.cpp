@@ -100,6 +100,52 @@ TEST_CASE("CSR instructions perform atomic read modify write") {
            CpuFixture::kBase + 0x80);
 }
 
+TEST_CASE("CPU enforces CSR privilege and enters machine mode on failure") {
+  CpuFixture fixture;
+  fixture.cpu_.set_privilege(PrivilegeLevel::User);
+  fixture.load_words({encode_csr(2, 2, 0, csr::kMstatus)});
+
+  const auto record = fixture.cpu_.step();
+  CHECK(record.privilege == PrivilegeLevel::User);
+  CHECK(record.trap.has_value());
+  CHECK(record.trap->cause == TrapCause::IllegalInstruction);
+  CHECK(!record.retired);
+  CHECK(fixture.cpu_.privilege() == PrivilegeLevel::Machine);
+  CHECK_EQ(fixture.cpu_.reg(2), std::uint64_t{0});
+  const auto mstatus = std::get<std::uint64_t>(fixture.cpu_.csrs().read(csr::kMstatus));
+  CHECK_EQ((mstatus & status::kMppMask) >> 11U,
+           static_cast<std::uint64_t>(PrivilegeLevel::User));
+}
+
+TEST_CASE("zero-source CSR reads do not write read-only state") {
+  CpuFixture fixture;
+  fixture.cpu_.set_privilege(PrivilegeLevel::User);
+  CHECK(!fixture.cpu_.csrs().write(csr::kMcounteren, 1));
+  CHECK(!fixture.cpu_.csrs().write(csr::kScounteren, 1, PrivilegeLevel::Supervisor));
+  fixture.load_words({encode_csr(2, 2, 0, csr::kCycle), kEbreak});
+
+  const auto read_record = fixture.cpu_.step();
+  CHECK(read_record.retired);
+  CHECK(!read_record.trap);
+  CHECK_EQ(fixture.cpu_.reg(2), std::uint64_t{1});
+  const auto breakpoint = fixture.cpu_.step();
+  CHECK(breakpoint.trap.has_value());
+}
+
+TEST_CASE("nonzero CSRRS attempts to write read-only state") {
+  CpuFixture fixture;
+  fixture.cpu_.set_privilege(PrivilegeLevel::User);
+  fixture.cpu_.set_reg(1, 1);
+  CHECK(!fixture.cpu_.csrs().write(csr::kMcounteren, 1));
+  CHECK(!fixture.cpu_.csrs().write(csr::kScounteren, 1, PrivilegeLevel::Supervisor));
+  fixture.load_words({encode_csr(2, 2, 1, csr::kCycle)});
+
+  const auto record = fixture.cpu_.step();
+  CHECK(record.trap.has_value());
+  CHECK(record.trap->cause == TrapCause::IllegalInstruction);
+  CHECK(!record.retired);
+}
+
 TEST_CASE("vectored trap policy enters mtvec and mret resumes") {
   CpuConfig config;
   config.trap_policy = TrapPolicy::VectorToMtvec;

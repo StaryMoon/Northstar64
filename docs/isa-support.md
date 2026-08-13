@@ -15,13 +15,21 @@
 | Zicsr | six CSR read/modify/write instructions |
 | Privileged subset | `ECALL`, `EBREAK`, `MRET`, `WFI`, direct machine trap entry |
 
+The development branch after 0.1 also models current M/S/U privilege, enforces CSR address-encoded
+access rules, exposes the supervisor CSR bank (`sstatus`, `sie`, `stvec`, `scounteren`, trap state,
+`sip`, and `satp`), and gates user counter reads through both machine and supervisor enable state.
+The `SXL`/`UXL` fields are fixed to 64 bits. `satp` accepts Bare and Sv39; unsupported modes leave
+the whole register unchanged as required by its WARL contract.
+
 The advertised machine ISA is `RV64I_Zicsr_Zifencei`. The current `misa` value reports RV64 with
 the `I` bit; `Zicsr` and `Zifencei` are not represented by legacy `misa` extension letters.
 
 ## Intentional Constraints
 
 - exactly one hart
-- machine mode only; all `ecall` instructions currently report machine-mode cause 11
+- trap delegation and supervisor return are not yet connected; synchronous traps currently enter M
+  mode even when they originate in S/U mode
+- all `ecall` instructions currently report machine-mode cause 11 until origin-aware trap routing lands
 - four-byte instruction alignment because the C extension is absent
 - naturally aligned multi-byte loads and stores
 - direct `mtvec` mode only
@@ -40,4 +48,3 @@ the `I` bit; `Zicsr` and `Zifencei` are not represented by legacy `misa` extensi
 
 Unsupported or reserved encodings trap as illegal instructions; they are not silently treated as
 no-ops.
-

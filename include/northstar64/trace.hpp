@@ -1,6 +1,7 @@
 #pragma once
 
 #include "northstar64/decode.hpp"
+#include "northstar64/privilege.hpp"
 #include "northstar64/trap.hpp"
 #include "northstar64/types.hpp"
 
@@ -31,6 +32,7 @@ struct MemoryWrite {
 struct StepRecord {
   std::uint64_t sequence{};
   Address pc{};
+  PrivilegeLevel privilege{PrivilegeLevel::Machine};
   std::uint32_t instruction{};
   std::string assembly;
   Address next_pc{};
@@ -70,4 +72,3 @@ std::optional<TraceDifference> compare_trace_files(const std::filesystem::path& 
                                                    const std::filesystem::path& right);
 
 } // namespace northstar64
-

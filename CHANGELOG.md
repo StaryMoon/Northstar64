@@ -5,6 +5,12 @@ All notable changes to Northstar64 are documented here. The project follows
 
 ## [Unreleased]
 
+### Added
+
+- Explicit M/S/U privilege state and privilege-aware CSR instruction execution.
+- Supervisor CSR views, counter-enable gates, and Bare/Sv39 `satp` WARL state.
+- Structured CSR access errors and privilege information in deterministic traces.
+
 ## [0.1.0] - 2026-08-13
 
 ### Added
@@ -19,4 +25,3 @@ All notable changes to Northstar64 are documented here. The project follows
 
 [Unreleased]: https://github.com/StaryMoon/Northstar64/compare/v0.1.0...HEAD
 [0.1.0]: https://github.com/StaryMoon/Northstar64/releases/tag/v0.1.0
-

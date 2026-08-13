@@ -93,6 +93,7 @@ Cpu::Cpu(Bus& bus, CpuConfig config) : bus_(bus), config_(config) { reset(0); }
 void Cpu::reset(Address entry) {
   registers_.fill(0);
   pc_ = entry;
+  privilege_ = PrivilegeLevel::Machine;
   csrs_.reset();
   sequence_ = 0;
   halted_ = false;
@@ -129,7 +130,8 @@ void Cpu::raise_trap(StepRecord& record, TrapCause cause, std::uint64_t value,
   Trap trap{cause, record.pc, value, std::move(detail)};
   record.trap = trap;
   record.retired = false;
-  csrs_.enter_trap(trap);
+  csrs_.enter_trap(trap, privilege_);
+  privilege_ = PrivilegeLevel::Machine;
 
   if (config_.trap_policy == TrapPolicy::VectorToMtvec) {
     pc_ = csrs_.trap_vector();
@@ -411,7 +413,7 @@ void Cpu::execute(StepRecord& record, const DecodedInstruction& instruction) {
   case Operation::Csrrwi:
   case Operation::Csrrsi:
   case Operation::Csrrci: {
-    auto old_result = csrs_.read(instruction.csr);
+    auto old_result = csrs_.read(instruction.csr, privilege_);
     if (const auto* error = std::get_if<CsrError>(&old_result)) {
       raise_trap(record, TrapCause::IllegalInstruction, instruction.raw, error->detail);
       return;
@@ -432,7 +434,7 @@ void Cpu::execute(StepRecord& record, const DecodedInstruction& instruction) {
       should_write = operand != 0U;
     }
     if (should_write) {
-      if (auto error = csrs_.write(instruction.csr, new_value)) {
+      if (auto error = csrs_.write(instruction.csr, new_value, privilege_)) {
         raise_trap(record, TrapCause::IllegalInstruction, instruction.raw, error->detail);
         return;
       }
@@ -453,6 +455,7 @@ StepRecord Cpu::step() {
   StepRecord record;
   record.sequence = sequence_++;
   record.pc = pc_;
+  record.privilege = privilege_;
   record.next_pc = pc_;
   record.halted = halted_;
 
