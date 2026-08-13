@@ -50,9 +50,9 @@ grep -F '"name":"load-page-fault","value":"0x0000000040004000"' \
   "$work_dir/isolation-first.jsonl"
 grep -F '"name":"store-page-fault","value":"0x0000000040002000"' \
   "$work_dir/isolation-first.jsonl"
-grep -F '"privilege":"machine"' "$work_dir/isolation-first.jsonl" | grep -F '"next_privilege":"supervisor"'
-grep -F '"privilege":"supervisor"' "$work_dir/isolation-first.jsonl" | grep -F '"next_privilege":"user"'
-grep -F '"privilege":"user"' "$work_dir/isolation-first.jsonl" | grep -F '"next_privilege":"supervisor"'
+grep -F '"privilege":"M"' "$work_dir/isolation-first.jsonl" | grep -F '"next_privilege":"S"'
+grep -F '"privilege":"S"' "$work_dir/isolation-first.jsonl" | grep -F '"next_privilege":"U"'
+grep -F '"privilege":"U"' "$work_dir/isolation-first.jsonl" | grep -F '"next_privilege":"S"'
 
 "$emulator" run "$guest_dir/isolation.elf" --max-steps 20000 \
   --trap-policy vector --trace "$work_dir/isolation-second.jsonl" >/dev/null 2>/dev/null
