@@ -21,13 +21,19 @@ The development branch models current M/S/U privilege, enforces CSR address-enco
 and exposes the supervisor CSR bank (`sstatus`, `sie`, `stvec`, `scounteren`, trap state, `sip`, and
 `satp`). User counter reads pass through both machine and supervisor enable state. The `SXL`/`UXL`
 fields are fixed to 64 bits. `satp` accepts Bare and Sv39 state encodings; address translation has not
-landed yet.
+been connected to CPU accesses yet.
 
 Synchronous exceptions consult `medeleg` only when they originate below M mode. Delegated traps
 write `sepc/scause/stval`, enter direct `stvec`, and update `SIE/SPIE/SPP`. All other traps write the
 machine bank, enter direct `mtvec`, and update `MIE/MPIE/MPP`. `ECALL` reports cause 8, 9, or 11 for
 U, S, or M origin. `SRET` and `MRET` restore their interrupt-enable and previous-privilege stacks;
 illegal lower-privilege execution traps without retiring.
+
+An independent Sv39 walker implements canonical-address checks, three-level traversal, all three
+leaf sizes, superpage alignment, U/S/SUM/MXR/R/W/X checks, reserved PTE validation, and Svade-style
+A/D faults. It reads PTEs through the physical bus and returns fault provenance without modifying
+page tables. This is reference semantics for the upcoming CPU integration, not a claim that current
+guest fetch/load/store operations use virtual addresses.
 
 The advertised machine ISA is `RV64I_Zicsr_Zifencei`. The current `misa` value reports RV64 with
 the `I` bit; `Zicsr` and `Zifencei` are not represented by legacy `misa` extension letters.
@@ -45,7 +51,7 @@ the `I` bit; `Zicsr` and `Zifencei` are not represented by legacy `misa` extensi
 ## Unsupported
 
 - M, A, F, D, C, V, and bit-manipulation extensions
-- Sv39/Sv48 address translation and TLB behavior
+- CPU-connected Sv39 translation, `SFENCE.VMA`, and TLB behavior; Sv48
 - asynchronous interrupt prioritization and delivery
 - hypervisor state
 - performance counters beyond deterministic `mcycle` and `minstret`

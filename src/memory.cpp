@@ -205,6 +205,8 @@ const char* access_kind_name(AccessKind kind) noexcept {
     return "load";
   case AccessKind::Store:
     return "store";
+  case AccessKind::PageTableWalk:
+    return "page-table-walk";
   case AccessKind::ImageLoad:
     return "image-load";
   }

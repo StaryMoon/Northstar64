@@ -12,6 +12,8 @@ All notable changes to Northstar64 are documented here. The project follows
 - Structured CSR access errors and privilege information in deterministic traces.
 - Origin-aware `ECALL` causes and synchronous exception delegation through `medeleg`.
 - Precise `SRET`/`MRET` privilege-stack restoration and before/after privilege trace fields.
+- Independent Sv39 page-table walker with typed fault provenance, superpages, permission checks,
+  and software-managed A/D behavior.
 
 ## [0.1.0] - 2026-08-13
 

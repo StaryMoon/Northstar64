@@ -23,7 +23,8 @@ breakpoint, and produces identical traces across repeated runs.
 - [x] model M/S/U privilege transitions
 - [x] supervisor CSRs and synchronous trap delegation
 - [x] implement precise `MRET`/`SRET` state restoration
-- implement Sv39 page-table walking and a software TLB
+- [x] implement an independent Sv39 page-table walker
+- connect CPU virtual accesses and add a software TLB
 - enforce R/W/X/U/A/D permissions and canonical virtual addresses
 - add `sfence.vma`
 - differential page-table tests against an independent reference walker
