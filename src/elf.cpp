@@ -6,6 +6,7 @@
 #include <limits>
 #include <sstream>
 #include <string>
+#include <type_traits>
 
 namespace northstar64 {
 namespace {
@@ -49,12 +50,15 @@ void require_range(std::span<const std::uint8_t> bytes, std::uint64_t offset, st
 
 template <typename T>
 T read_little_endian(std::span<const std::uint8_t> bytes, std::uint64_t offset) {
+  static_assert(std::is_unsigned_v<T>);
+  static_assert(sizeof(T) <= sizeof(std::uint64_t));
   require_range(bytes, offset, sizeof(T), "integer field");
-  T value = 0;
+  std::uint64_t value = 0;
   for (std::size_t index = 0; index < sizeof(T); ++index) {
-    value |= static_cast<T>(bytes[static_cast<std::size_t>(offset) + index]) << (index * 8U);
+    value |= static_cast<std::uint64_t>(bytes[static_cast<std::size_t>(offset) + index])
+             << (index * 8U);
   }
-  return value;
+  return static_cast<T>(value);
 }
 
 ElfImage parse(std::span<const std::uint8_t> bytes) {
