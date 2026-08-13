@@ -11,6 +11,7 @@ CORE_SOURCES := \
 	src/elf.cpp \
 	src/machine.cpp \
 	src/memory.cpp \
+	src/privilege.cpp \
 	src/trace.cpp \
 	src/trap.cpp \
 	src/uart.cpp
@@ -18,6 +19,7 @@ CORE_SOURCES := \
 TEST_SOURCES := \
 	tests/test_main.cpp \
 	tests/test_cpu.cpp \
+	tests/test_csr.cpp \
 	tests/test_decode.cpp \
 	tests/test_elf.cpp \
 	tests/test_memory.cpp \
