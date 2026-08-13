@@ -29,6 +29,7 @@ RV64 ELF  ->  strict loader  ->  sparse physical bus  ->  decode/execute  ->  UA
 - a non-overlapping memory bus, sparse zero-filled RAM, and a byte-access 16550 UART model
 - strict, bounds-checked ELF64 RISC-V `ET_EXEC` loading with transactional range validation
 - deterministic instruction traces with first-divergence comparison
+- one portable M/S/U isolation guest cross-checked against QEMU `virt`
 - a scriptable CLI for running, inspecting, decoding, and comparing executions
 - unit, sanitizer, macOS/Linux compiler-matrix, and real cross-compiled RV64I guest tests
 
@@ -70,6 +71,20 @@ architectural breakpoint. Running it twice produces byte-identical traces:
 ./.build/northstar64 verify-trace first.trace.jsonl second.trace.jsonl
 # traces are byte-for-byte identical
 ```
+
+The deeper integration image composes delegated traps and Sv39 instead of testing them in
+isolation:
+
+```bash
+./.build/northstar64 run build/guest/isolation.elf \
+  --trap-policy vector \
+  --max-steps 20000 \
+  --trace isolation.trace.jsonl
+```
+
+It boots in M mode, enters S and U mode, routes user output through supervisor `ECALL` handling,
+recovers from an unmapped load and a write to a read-only user page, and prints the same deterministic
+PASS transcript on Northstar64 and QEMU `virt`.
 
 Other useful commands:
 
@@ -119,7 +134,8 @@ and [the determinism model](docs/determinism.md) before extending the machine.
 Northstar64 is not yet a complete RISC-V platform and does not currently boot Linux. The `v0.1.0`
 release is a machine-mode baseline. Current `main` adds explicit M/S/U state, supervisor CSRs,
 delegated synchronous traps, precise return transitions, and Sv39 translation for S/U fetch, load,
-and store accesses. It still has no TLB, asynchronous interrupts, floating point, atomics,
+and store accesses. A portable freestanding guest validates those pieces together against QEMU
+`virt`. It still has no PMP model, TLB, asynchronous interrupts, floating point, atomics,
 compressed instructions, or block device. It has not yet passed the upstream `riscv-arch-test`
 suite.
 

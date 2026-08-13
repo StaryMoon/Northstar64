@@ -36,6 +36,12 @@ page tables. CPU integration maps translation failures to instruction/load/store
 physical-walk or translated-target failures to the corresponding access fault. `SFENCE.VMA` is a
 privilege-checked no-op until a TLB exists.
 
+The integration suite composes these rules in one freestanding image: M-mode bootstrap, guarded PMP
+capability probing, delegated traps, static Sv39 mappings, a full S-mode trap frame, U-mode system
+calls, and recovery from load/store page faults. CI requires an identical UART transcript on
+Northstar64 and QEMU `virt`; Northstar64 additionally requires byte-identical repeated traces. This
+does not advertise PMP support: unsupported PMP CSR writes take the guest's guarded probe path.
+
 The advertised machine ISA is `RV64I_Zicsr_Zifencei`. The current `misa` value reports RV64 with
 the `I` bit; `Zicsr` and `Zifencei` are not represented by legacy `misa` extension letters.
 
@@ -53,6 +59,7 @@ the `I` bit; `Zicsr` and `Zifencei` are not represented by legacy `misa` extensi
 
 - M, A, F, D, C, V, and bit-manipulation extensions
 - TLB behavior, MPRV data-access override, and Sv48
+- PMP/PMA enforcement
 - asynchronous interrupt prioritization and delivery
 - hypervisor state
 - performance counters beyond deterministic `mcycle` and `minstret`
